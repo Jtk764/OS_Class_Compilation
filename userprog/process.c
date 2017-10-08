@@ -17,13 +17,76 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/kernel/list.h"
+#include "threads/malloc.h"
 
 #define LOGGING_LEVEL 6
 
 #include "lib/log.h"
 
+static struct list args_list;
+int listlength;
+
+struct command
+  {
+    int token_length;
+    char* token;      /* List head. */
+    struct list_elem elem;      /* List tail. */
+  };
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+struct command* newCommand(char* cmdline){
+  struct command* retval = malloc(sizeof( struct command));
+  if (retval == NULL) return NULL;
+  retval->token = calloc(strlen(cmdline)+1,sizeof(char));
+  if (retval->token == NULL) {
+    free(retval);
+    return NULL;
+  }
+  strlcpy(retval->token, cmdline, strlen(cmdline)+1);
+  retval->token_length=strlen(cmdline)+1;
+  list_push_back(&args_list, &retval->elem);
+  return retval;
+}
+
+char* create_arg_list (char* cmdline){
+  list_init(&args_list);
+  char **saveptr;
+  int  byte_length=0;
+  char *curr=strtok_r(cmdline, " ", saveptr);
+  while (curr != NULL ){
+    if(newCommand(curr) != NULL ) return NULL;
+    listlength++;
+    byte_length+=(strlen(curr)+1);
+    *curr=strtok_r(NULL, " ", saveptr);
+  }
+  if(byte_length%4 != 0) {
+      struct command* retval= malloc(sizeof( struct command));
+    if (retval == NULL) return NULL;
+    retval->token = calloc(4-(byte_length%4),sizeof(char));
+    if (retval->token == NULL) {
+    free(retval);
+    return NULL;
+  }
+  retval->token_length=4-(byte_length%4);
+  list_push_back(&args_list, &retval->elem);
+  }
+  return (list_entry (list_front(&args_list), struct command, elem))->token;
+}
+
+void free_arg_list(){
+  struct command* c;
+  while (!list_empty (&args_list))
+  {
+    struct list_elem *e = list_pop_front (&args_list);
+    c=list_entry (e, struct command, elem);
+    free(c->token);
+    free(c);
+  }
+  listlength=0;
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -49,9 +112,11 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  //tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (create_arg_list(fn_copy), PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+    free_arg_list();
   return tid;
 }
 
@@ -73,8 +138,10 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success)
+  if (!success){
     thread_exit ();
+    free_arg_list();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -440,17 +507,42 @@ static bool
 setup_stack (void **esp)
 {
   uint8_t *kpage;
+  int i=0;
   bool success = false;
+  int * argsv = calloc(listlength,sizeof(int)); 
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
+        struct list_elem *e;
         *esp = PHYS_BASE;
+        for (e = list_rbegin (&args_list); e != list_rend (&args_list); e = list_prev (e))
+        {
+          struct command *c = list_entry (e, struct command, elem);
+          *esp=*esp-(c->token_length);
+          if (*c->token==NULL) memset(*esp, 0, c->token_length);
+          else{
+            memcpy(*esp, c->token, c->token_length);
+            argsv[i]=*esp;
+            i++;
+          }
+        }
+        *esp=*esp-4;
+        memset(*esp, 0, 4);
+        for (i=i; i >= 0; i--){
+        *esp=*esp-4;
+        memcpy(*esp, &argsv[i], 4);
+        }
+        *esp=*esp-4;
+        memcpy(*esp, *esp+4, 4);
+      }
       else
         palloc_free_page (kpage);
     }
+  free(argsv);
+  free_arg_list();
   return success;
 }
 
