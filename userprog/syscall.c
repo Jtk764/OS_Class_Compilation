@@ -5,6 +5,8 @@
 #include "threads/thread.h"
 #include "lib/kernel/list.h"
 #include <stdlib.h>
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -25,12 +27,56 @@ struct fdesc* findFD(struct list *l, int fd){
     return NULL;
 }
 
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int
+get_user (const uint8_t *uaddr)
+{
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
+}
+ 
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool
+put_user (uint8_t *udst, uint8_t byte)
+{
+  int error_code;
+  asm ("movl $1f, %0; movb %b2, %1; 1:"
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
+}
+
+static bool
+check_string(uint8_t *start){
+    char temp;
+    int i = 0;
+    if(start > PHYS_BASE) return false;
+    while(temp = get_user(start + i)){
+        i++;
+        if((start + i)> PHYS_BASE) return false;
+    }
+    if(temp = NULL) return true;
+    if(temp = -1) return false;
+    return false;
+}
+
+//GLOBAL static semaphore for file-sys
+static struct semaphore *sema;
+
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
+    if(sema == NULL) sema_init(sema, 1);
     //TODO VERIFY POINTERS ARE ABOVE PHYSBASE
-    uint8_t* call = f->esp;          //pointer to the stack, points to syscall number, then each argument
-    switch(*(uint8_t *)call) {
+    uint32_t* call = f->esp;          //pointer to the stack, points to syscall number, then each argument
+    struct thread *current = thread_current();
+    switch(*call) {
         case SYS_HALT:
             shutdown_power_off();
 
@@ -39,22 +85,35 @@ syscall_handler (struct intr_frame *f UNUSED)
             thread_exit();
             
         case SYS_EXEC:
-            //process execute should handle the token parsing for the argument to exec
-            ;
+            //check the command line string for seg faults
+            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+
+            //process execute should handle the token parsing for the argument to exec            
             tid_t thd;
+            sema_down(sema);
             if((thd = process_execute(*(call+1))) == TID_ERROR)
                 (f->eax) = -1;
             else
                 (f->eax) = (uint32_t)thd;
+            //wait on semaphore to be updated from child when it executes
+
+            sema_up(sema);
 
         case SYS_CREATE:
+            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            sema_down(sema);
             (f->eax) = filesys_create(*(call+1), *(call+2));
+            sema_up(sema);
 
         case SYS_REMOVE:
+            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            sema_down(sema);
             (f->eax) = filesys_remove(*(call+1));
+            sema_up(sema);
 
         case SYS_OPEN:
-            ;
+            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            sema_down(sema);
             struct file *ret;
             if((ret = filesys_open(*(call+1)) == NULL)){
                 (f->eax) = -1;
@@ -90,18 +149,22 @@ syscall_handler (struct intr_frame *f UNUSED)
                     }
                 }
             }
+            sema_up(sema);
 
         case SYS_FILESIZE:
-            ;
+            sema_down(sema);
             struct file *fl;
-            struct thread *current = thread_current();
+
             if((fl = findFD((current->fdt), *(call + 1))) == NULL){
                 printf("uh oh");
                 break;
             }
             (f->eax) = file_length(fl);
+            sema_up(sema);
 
         case SYS_READ:
+            if(!check_string((uint8_t *)(call + 2))) thread_exit();
+            sema_down(sema);
             if(*(call + 1) == 0){
                 int i;
                 for(i = 0; i < *(call + 3); i++){
@@ -110,14 +173,16 @@ syscall_handler (struct intr_frame *f UNUSED)
                 (f->eax) = *(call + 3);
                 break;
             }
-            current = thread_current();
             if(fl = findFD((current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             (f->eax) = file_read(fl, *(call + 2), *(call + 3));
+            sema_up(sema);
 
         case SYS_WRITE:
+            if(!check_string((uint8_t *)(call + 2))) thread_exit();
+            sema_down(sema);
             if(*(call + 1) == 1){
                 int i;
                 for(i = 0; i + 250< *(call + 3); i = i+250){
@@ -127,41 +192,41 @@ syscall_handler (struct intr_frame *f UNUSED)
                 (f->eax) = *(call + 3);
             }
             else{
-                current = thread_current();
                 if(fl = findFD((current->fdt), *(call + 1)) == NULL){
                     printf("uh oh");
                     break;
                 }
                 (f->eax) = file_write(fl, *(call + 2), *(call + 3));
             }
+            sema_up(sema);
 
         case SYS_SEEK:
-            ;
-            current = thread_current();
+            sema_down(sema);
             if(fl = findFD((current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             file_seek(fl, (call + 2));
+            sema_up(sema);
 
         case SYS_TELL:
-            ;
-            current = thread_current();
+            sema_down(sema);
             if(fl = findFD((current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             (f->eax) = file_tell(fl);
+            sema_up(sema);
 
 
         case SYS_CLOSE:
-            ;
-            current = thread_current();
+            sema_down(sema);
             if(fl = findFD((current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             file_close(fl);
+            sema_up(sema);
 
     }
 
