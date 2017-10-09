@@ -161,7 +161,7 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);}
   else{
-    *f->eip=f->eax
-    *f->eax=0xffffffff
+    f->eip=f->eax
+    f->eax=0xffffffff
   }
 }
