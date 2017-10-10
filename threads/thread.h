@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 
@@ -131,7 +132,7 @@ struct thread
     struct semaphore sema;            /* for process_wait */
     int status;
     bool waited;                        /* has process been waited on yet */
-  }
+  };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -174,7 +175,7 @@ thread_create (const char *name, int priority,
   struct list fdt;
   list_init(&fdt);
     
-  initial_thread->fdt = &fdt;
+  t->fdt = fdt;
 
   ASSERT (function != NULL);
 
@@ -187,7 +188,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->parent=thread_current;
-  list_push_back (&t->parent->children, t->c->childelem);
+  list_push_back (&t->parent->children, &t->c->childelem);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -287,7 +288,7 @@ void
 thread_exit (void)
 {
   ASSERT (!intr_context ());
-  sema_up(thread_current ()->c->sema);
+  sema_up(&thread_current ()->c->sema);
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -473,9 +474,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   list_init(&t->fdt);
-  t->c=malloc(struct child_sema);
-  sema_init (t->c->p_semma,0);
-  sema_init (t->c->semma,0);
+  t->c=malloc(sizeof(struct child_sema));
+  sema_init (&t->c->p_sema,0);
+  sema_init (&t->c->sema,0);
   t->c->tid=t->tid;
 
   old_level = intr_disable ();
