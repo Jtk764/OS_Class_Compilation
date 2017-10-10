@@ -101,11 +101,9 @@ struct thread
     int priority;                       /* Priority. */
     
     struct list_elem allelem;           /* List element for all threads list. */
-    
-    struct list_elem childelem;         /* used to keep track of children */
 
-    struct semaphore p_sema;
-    
+    struct semaphore p_sema;            /* for exec */
+    struct child_sema *c;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
@@ -123,6 +121,14 @@ struct thread
     struct list fdt;
     struct list children;
   };
+
+
+  struct child_sema {
+    struct list_elem childelem
+    tid_t tid;
+    struct semaphore sema;            /* for process_wait */
+    int status;
+  }
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

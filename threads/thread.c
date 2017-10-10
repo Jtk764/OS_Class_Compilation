@@ -97,13 +97,7 @@ thread_init (void)
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid ();
-
-    struct list fdt;
-    list_init(&fdt);
-    
-    initial_thread->fdt = &fdt;
-    
+  initial_thread->tid = allocate_tid ();  
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -177,6 +171,10 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  struct list fdt;
+  list_init(&fdt);
+    
+  initial_thread->fdt = &fdt;
 
   ASSERT (function != NULL);
 
@@ -188,6 +186,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->parent=thread_current;
+  list_push_back (&t->parent->children, t->c->childelem);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -287,7 +287,7 @@ void
 thread_exit (void)
 {
   ASSERT (!intr_context ());
-
+  sema_up(thread_current ()->c->sema);
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -298,6 +298,7 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
+
   schedule ();
   NOT_REACHED ();
 }
@@ -457,6 +458,7 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
+
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -469,6 +471,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  list_init(&t->fdt);
+  t->c=malloc(struct child_sema);
+  sema_init (&t->p_semma,0);
+  sema_init (t->c->semma,0);
+  t->c->tid=t->tid;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
