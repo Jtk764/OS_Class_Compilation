@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/vaddr.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -102,12 +103,11 @@ struct thread
     
     struct list_elem allelem;           /* List element for all threads list. */
 
-    struct semaphore p_sema;            /* for exec */
+
     struct child_sema *c;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
-    bool waited;                        /* has process been waited on yet */
     struct thread* parent;              /* the threads parent */
 
 #ifdef USERPROG
@@ -124,10 +124,12 @@ struct thread
 
 
   struct child_sema {
-    struct list_elem childelem
+    struct list_elem childelem;
+    struct semaphore p_sema;            /* for exec */
     tid_t tid;
     struct semaphore sema;            /* for process_wait */
     int status;
+    bool waited;                        /* has process been waited on yet */
   }
 
 /* If false (default), use round-robin scheduler.

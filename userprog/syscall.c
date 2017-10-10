@@ -81,8 +81,17 @@ syscall_handler (struct intr_frame *f UNUSED)
             shutdown_power_off();
 
         case SYS_EXIT:
-            //all you got to do?
+            //set exit status of child struct for current thread 
+            struct list_elem *e;
+            for(e = list_begin(current->parent->children); e != list_end(current->parent->children); e = list_next(e)){
+                if(list_entry(e, struct child_sema, childelem)->tid == current->tid){
+                    list_entry(e, struct child_sema, childelem)->status = *(call + 1);
+                }
+            }
             thread_exit();
+
+        case SYS_WAIT:
+            process_wait((tid_t) *(call + 1));
             
         case SYS_EXEC:
             //check the command line string for seg faults
@@ -94,6 +103,12 @@ syscall_handler (struct intr_frame *f UNUSED)
             if((thd = process_execute(*(call+1))) == TID_ERROR)
                 (f->eax) = -1;
             else
+                struct list_elem *e;
+                for(e = list_begin(current->children); e != list_end(current->children); e = list_next(e)){
+                    if(list_entry(e, struct child_sema, childelem)->tid == thd){
+                        sema_down(list_entry(e, struct child_sema, childelem)->p_sema);
+                    }
+                }
                 (f->eax) = (uint32_t)thd;
             //wait on semaphore to be updated from child when it executes
 

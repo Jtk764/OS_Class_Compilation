@@ -474,7 +474,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   list_init(&t->fdt);
   t->c=malloc(struct child_sema);
-  sema_init (&t->p_semma,0);
+  sema_init (t->c->p_semma,0);
   sema_init (t->c->semma,0);
   t->c->tid=t->tid;
 

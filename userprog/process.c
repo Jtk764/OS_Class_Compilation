@@ -142,6 +142,7 @@ start_process (void *file_name_)
     thread_exit ();
     free_arg_list();
   }
+  sema_up(thread_current()->c->p_sema)
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -165,6 +166,18 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
+
+  //remove child element from parent thread
+  struct list_elem *e;
+  struct thread *current = thread_current();
+  for(e = list_begin(current->children); e != list_end(current->children); e = list_next(e)){
+    if(list_entry(e, struct child_sema, childelem)->tid == child_tid){
+      if(list_entry(e, struct child_sema, childelem)->waited) return -1;
+      list_entry(e, struct child_sema, childelem)->waited = true;
+      sema_down(list_entry(e, struct child_sema, childelem)->sema);
+      return list_entry(e, struct child_sema, childelem)->status;
+    }
+  }
   return -1;
 }
 
