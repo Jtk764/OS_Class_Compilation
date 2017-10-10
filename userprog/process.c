@@ -53,14 +53,14 @@ struct command* newCommand(char* cmdline){
 
 char* create_arg_list (char* cmdline){
   list_init(&args_list);
-  char **saveptr;
+  char *saveptr;
   int  byte_length=0;
-  char *curr=strtok_r(cmdline, " ", saveptr);
+  char *curr=strtok_r(cmdline, " ", &saveptr);
   while (curr != NULL ){
-    if(newCommand(curr) != NULL ) return NULL;
+    if(newCommand(curr) == NULL ) return NULL;
     listlength++;
     byte_length+=(strlen(curr)+1);
-    *curr=strtok_r(NULL, " ", saveptr);
+    *curr=strtok_r(NULL, " ", &saveptr);
   }
   if(byte_length%4 != 0) {
       struct command* retval= malloc(sizeof( struct command));
