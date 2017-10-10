@@ -166,6 +166,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
+//  while(1);
 
   //remove child element from parent thread
   struct list_elem *e;
@@ -178,6 +179,7 @@ process_wait (tid_t child_tid UNUSED)
       return list_entry(e, struct child_sema, childelem)->status;
     }
   }
+
   return -1;
 }
 

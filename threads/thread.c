@@ -172,10 +172,9 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  struct list fdt;
-  list_init(&fdt);
+  
     
-  t->fdt = fdt;
+
 
   ASSERT (function != NULL);
 
@@ -187,9 +186,11 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  t->parent=thread_current;
-  list_push_back (&t->parent->children, &t->c->childelem);
-
+//  list_init(&t->fdt);
+  if(t != initial_thread->tid){
+    t->parent=thread_current();
+    list_push_back (&t->parent->children, &t->c->childelem);
+  }
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -473,11 +474,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  list_init(&t->children);
   list_init(&t->fdt);
-  t->c=malloc(sizeof(struct child_sema));
-  sema_init (&t->c->p_sema,0);
-  sema_init (&t->c->sema,0);
-  t->c->tid=t->tid;
+  if(t != initial_thread){
+    t->c=(struct child_sema *)malloc(sizeof(struct child_sema));
+    sema_init (&t->c->p_sema,0);
+    sema_init (&t->c->sema,0);
+    t->c->tid=t->tid;
+  }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "filesys/file.h" 
 
 static void syscall_handler (struct intr_frame *);
 static struct semaphore sema;
@@ -167,13 +168,13 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
         case SYS_FILESIZE:
             sema_down(&sema);
-            struct file *fl;
+            struct fdesc *fl;
 
             if((fl = findFD(&(current->fdt), *(call + 1))) == NULL){
                 printf("uh oh");
                 break;
             }
-            (f->eax) = file_length(fl);
+            (f->eax) = file_length(fl->f);
             sema_up(&sema);
             break;
         case SYS_READ:
@@ -191,7 +192,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                 printf("uh oh");
                 break;
             }
-            (f->eax) = file_read(fl, *(call + 2), *(call + 3));
+            (f->eax) = file_read(fl->f, *(call + 2), *(call + 3));
             sema_up(&sema);
             break;
         case SYS_WRITE:
@@ -210,7 +211,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                     printf("uh oh");
                     break;
                 }
-                (f->eax) = file_write(fl, *(call + 2), *(call + 3));
+                (f->eax) = file_write(fl->f, *(call + 2), *(call + 3));
             }
             sema_up(&sema);
             break;
@@ -220,7 +221,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                 printf("uh oh");
                 break;
             }
-            file_seek(fl, (call + 2));
+            file_seek(&fl->f, (call + 2));
             sema_up(&sema);
 
         case SYS_TELL:
@@ -229,7 +230,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                 printf("uh oh");
                 break;
             }
-            (f->eax) = file_tell(fl);
+            (f->eax) = file_tell(fl->f);
             sema_up(&sema);
 
             break;
@@ -239,7 +240,9 @@ syscall_handler (struct intr_frame *f UNUSED)
                 printf("uh oh");
                 break;
             }
-            file_close(fl);
+            file_close(fl->f);
+            list_remove(&fl->elem);
+            free(fl);
             sema_up(&sema);
             break;
     }

@@ -38,6 +38,17 @@ struct fdesc {
     struct file *f;   
 };
 
+
+struct child_sema {
+    struct list_elem childelem;
+    struct semaphore p_sema;            /* for exec */
+    tid_t tid;
+    struct semaphore sema;            /* for process_wait */
+    int status;
+    bool waited;                        /* has process been waited on yet */
+  };
+
+  
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -125,14 +136,7 @@ struct thread
   };
 
 
-  struct child_sema {
-    struct list_elem childelem;
-    struct semaphore p_sema;            /* for exec */
-    tid_t tid;
-    struct semaphore sema;            /* for process_wait */
-    int status;
-    bool waited;                        /* has process been waited on yet */
-  };
+  
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
