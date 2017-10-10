@@ -9,10 +9,12 @@
 #include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
+static struct semaphore sema;
 
 void
 syscall_init (void)
 {
+  sema_init(&sema, 1);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -67,23 +69,23 @@ check_string(uint8_t *start){
 }
 
 //GLOBAL static semaphore for file-sys
-static struct semaphore *sema;
+
 
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
-    if(sema == NULL) sema_init(sema, 1);
+    struct list_elem *e;
     //TODO VERIFY POINTERS ARE ABOVE PHYSBASE
     uint32_t* call = f->esp;          //pointer to the stack, points to syscall number, then each argument
     struct thread *current = thread_current();
     switch(*call) {
         case SYS_HALT:
             shutdown_power_off();
-
+            break;
         case SYS_EXIT:
             //set exit status of child struct for current thread 
-            struct list_elem *e;
-            for(e = list_begin(current->parent->children); e != list_end(current->parent->children); e = list_next(e)){
+            
+            for(e = list_begin(&current->parent->children); e != list_end(&current->parent->children); e = list_next(e)){
                 if(list_entry(e, struct child_sema, childelem)->tid == current->tid){
                     list_entry(e, struct child_sema, childelem)->status = *(call + 1);
                 }
@@ -92,61 +94,58 @@ syscall_handler (struct intr_frame *f UNUSED)
 
         case SYS_WAIT:
             process_wait((tid_t) *(call + 1));
-            
+            break;
         case SYS_EXEC:
             //check the command line string for seg faults
             if(!check_string((uint8_t *)(call + 1))) thread_exit();
 
             //process execute should handle the token parsing for the argument to exec            
             tid_t thd;
-            sema_down(sema);
+            sema_down(&sema);
             if((thd = process_execute(*(call+1))) == TID_ERROR)
                 (f->eax) = -1;
-            else
-                struct list_elem *e;
-                for(e = list_begin(current->children); e != list_end(current->children); e = list_next(e)){
+            else{
+                for(e = list_begin(&current->children); e != list_end(&current->children); e = list_next(e)){
                     if(list_entry(e, struct child_sema, childelem)->tid == thd){
-                        sema_down(list_entry(e, struct child_sema, childelem)->p_sema);
+                        sema_down(&list_entry(e, struct child_sema, childelem)->p_sema);
                     }
                 }
                 (f->eax) = (uint32_t)thd;
             //wait on semaphore to be updated from child when it executes
-
-            sema_up(sema);
-
+            }
+            sema_up(&sema);
+            break;
         case SYS_CREATE:
             if(!check_string((uint8_t *)(call + 1))) thread_exit();
-            sema_down(sema);
+            sema_down(&sema);
             (f->eax) = filesys_create(*(call+1), *(call+2));
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
         case SYS_REMOVE:
             if(!check_string((uint8_t *)(call + 1))) thread_exit();
-            sema_down(sema);
+            sema_down(&sema);
             (f->eax) = filesys_remove(*(call+1));
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
         case SYS_OPEN:
             if(!check_string((uint8_t *)(call + 1))) thread_exit();
-            sema_down(sema);
+            sema_down(&sema);
             struct file *ret;
-            if((ret = filesys_open(*(call+1)) == NULL)){
-                (f->eax) = -1;
-            }
-            else{
+            if((ret = filesys_open(*(call+1)) == NULL)) (f->eax) = -1;
+                        else{
                 struct fdesc *filed = (struct fdesc*)malloc(sizeof(struct fdesc));
                 filed->f = ret;
                 struct thread *current = thread_current();
-                struct list_elem *e;
+               
                 //add to empty list
-                if(list_empty((current->fdt))){
+                if(list_empty(&(current->fdt))){
                     filed->fd = 2;
-                    list_insert(list_end((current->fdt)), &(filed->elem));
+                    list_insert(list_end(&(current->fdt)), &(filed->elem));
                     (f->eax) = 2;
                 }
                 //list not empty
                 else{
-                    for(e=list_begin((current->fdt)); e != list_end((current->fdt)); e = list_next(e)){
+                    for(e=list_begin(&(current->fdt)); e != list_end(&(current->fdt)); e = list_next(e)){
                         //skipped an fd number
                         if(list_entry(list_prev(e), struct fdesc, elem)->fd != (list_entry(e, struct fdesc, elem)->fd - 1)){
                             filed->fd = list_entry(e, struct fdesc, elem)->fd - 1;
@@ -154,32 +153,32 @@ syscall_handler (struct intr_frame *f UNUSED)
                             (f->eax) = list_entry(e, struct fdesc, elem)->fd - 1;
                         }
                         //got through to last element in list
-                        if(list_entry(e, struct fdesc, elem)->fd == (list_size((current->fdt)) + 1)){
-                            filed->fd = list_size((current->fdt)) + 2;
-                            list_push_back((current->fdt), &(filed->elem));
-                            (f->eax) = list_size((current->fdt)) + 2;
+                        if(list_entry(e, struct fdesc, elem)->fd == (list_size(&(current->fdt)) + 1)){
+                            filed->fd = list_size(&(current->fdt)) + 2;
+                            list_push_back(&(current->fdt), &(filed->elem));
+                            (f->eax) = list_size(&(current->fdt)) + 2;
                         }
 
 
                     }
                 }
             }
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
         case SYS_FILESIZE:
-            sema_down(sema);
+            sema_down(&sema);
             struct file *fl;
 
-            if((fl = findFD((current->fdt), *(call + 1))) == NULL){
+            if((fl = findFD(&(current->fdt), *(call + 1))) == NULL){
                 printf("uh oh");
                 break;
             }
             (f->eax) = file_length(fl);
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
         case SYS_READ:
             if(!check_string((uint8_t *)(call + 2))) thread_exit();
-            sema_down(sema);
+            sema_down(&sema);
             if(*(call + 1) == 0){
                 int i;
                 for(i = 0; i < *(call + 3); i++){
@@ -188,16 +187,16 @@ syscall_handler (struct intr_frame *f UNUSED)
                 (f->eax) = *(call + 3);
                 break;
             }
-            if(fl = findFD((current->fdt), *(call + 1)) == NULL){
+            if(fl = findFD(&(current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             (f->eax) = file_read(fl, *(call + 2), *(call + 3));
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
         case SYS_WRITE:
             if(!check_string((uint8_t *)(call + 2))) thread_exit();
-            sema_down(sema);
+            sema_down(&sema);
             if(*(call + 1) == 1){
                 int i;
                 for(i = 0; i + 250< *(call + 3); i = i+250){
@@ -207,42 +206,42 @@ syscall_handler (struct intr_frame *f UNUSED)
                 (f->eax) = *(call + 3);
             }
             else{
-                if(fl = findFD((current->fdt), *(call + 1)) == NULL){
+                if(fl = findFD(&(current->fdt), *(call + 1)) == NULL){
                     printf("uh oh");
                     break;
                 }
                 (f->eax) = file_write(fl, *(call + 2), *(call + 3));
             }
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
         case SYS_SEEK:
-            sema_down(sema);
-            if(fl = findFD((current->fdt), *(call + 1)) == NULL){
+            sema_down(&sema);
+            if(fl = findFD(&(current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             file_seek(fl, (call + 2));
-            sema_up(sema);
+            sema_up(&sema);
 
         case SYS_TELL:
-            sema_down(sema);
-            if(fl = findFD((current->fdt), *(call + 1)) == NULL){
+            sema_down(&sema);
+            if(fl = findFD(&(current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             (f->eax) = file_tell(fl);
-            sema_up(sema);
+            sema_up(&sema);
 
-
+            break;
         case SYS_CLOSE:
-            sema_down(sema);
-            if(fl = findFD((current->fdt), *(call + 1)) == NULL){
+            sema_down(&sema);
+            if(fl = findFD(&(current->fdt), *(call + 1)) == NULL){
                 printf("uh oh");
                 break;
             }
             file_close(fl);
-            sema_up(sema);
-
+            sema_up(&sema);
+            break;
     }
 
 }
