@@ -99,10 +99,18 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    
     struct list_elem allelem;           /* List element for all threads list. */
+    
+    struct list_elem childelem;         /* used to keep track of children */
 
+    struct semaphore p_sema;
+    
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    
+    bool waited;                        /* has process been waited on yet */
+    struct thread* parent;              /* the threads parent */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -112,7 +120,8 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    struct list *fdt;
+    struct list fdt;
+    struct list children;
   };
 
 /* If false (default), use round-robin scheduler.
