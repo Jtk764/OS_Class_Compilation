@@ -97,6 +97,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  char *temp;
 
   // NOTE:
   // To see this print, make sure LOGGING_LEVEL in this file is <= L_TRACE (6)
@@ -112,10 +113,12 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  //tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  tid = thread_create (create_arg_list(fn_copy), PRI_DEFAULT, start_process, fn_copy);
+  //tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy
+  temp = create_arg_list(fn_copy);
+  tid = thread_create (temp, PRI_DEFAULT, start_process, temp);
+  palloc_free_page (fn_copy);
   if (tid == TID_ERROR){
-    palloc_free_page (fn_copy);
+//    palloc_free_page (fn_copy);
     free_arg_list();
   }
   return tid;
@@ -138,7 +141,6 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success){
     thread_exit ();
     free_arg_list();
