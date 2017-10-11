@@ -56,6 +56,7 @@ char* create_arg_list (char* cmdline){
   char *saveptr;
   int  byte_length=0;
   char *curr=strtok_r(cmdline, " ", &saveptr);
+  char *returnval;
   while (*curr != NULL ){
     if(newCommand(curr) == NULL ) return NULL;
     listlength++;
@@ -71,7 +72,9 @@ char* create_arg_list (char* cmdline){
     return NULL;
   }
   retval->token_length=4-(byte_length%4);
-  list_push_back(&args_list, &retval->elem);
+  returnval=(list_entry (list_front(&args_list), struct command, elem))->token;
+  list_push_front(&args_list, &retval->elem);
+  return returnval;
   }
   return (list_entry (list_front(&args_list), struct command, elem))->token;
 }
@@ -530,6 +533,7 @@ setup_stack (void **esp)
   int i=0;
   bool success = false;
   int * argsv = calloc(listlength,sizeof(int)); 
+  int j;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
@@ -541,7 +545,7 @@ setup_stack (void **esp)
         for (e = list_rbegin (&args_list); e != list_rend (&args_list); e = list_prev (e))
         {
           struct command *c = list_entry (e, struct command, elem);
-          *esp=*esp-(c->token_length);
+          *esp+=-(c->token_length);
           if (*c->token==NULL) memset(*esp, 0, c->token_length);
           else{
             memcpy(*esp, c->token, c->token_length);
@@ -549,18 +553,22 @@ setup_stack (void **esp)
             i++;
           }
         }
-        *esp=*esp-4;
+        *esp+=-4;
         memset(*esp, 0, 4);
-        for (i=i; i >= 0; i--){
-        *esp=*esp-4;
-        memcpy(*esp, &argsv[i], 4);
+        for (j=0; j < i; j++){
+        *esp+=-4;
+        memcpy(*esp, &argsv[j], 4);
         }
-        *esp=*esp-4;
+        *esp+=-4;
         memcpy(*esp, *esp+4, 4);
+        *esp+=-4;
+        memcpy(*esp, &i, 4);
+        *esp+=-4;
       }
       else
         palloc_free_page (kpage);
     }
+  hex_dump(*esp, *esp, 40, true);
   free(argsv);
   free_arg_list();
   return success;
