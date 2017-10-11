@@ -10,14 +10,6 @@
 #include "filesys/file.h" 
 
 static void syscall_handler (struct intr_frame *);
-static struct semaphore sema;
-
-void
-syscall_init (void)
-{
-  sema_init(&sema, 1);
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-}
 
 struct fdesc* findFD(struct list *l, int fd){
     struct list_elem *e;
@@ -29,6 +21,7 @@ struct fdesc* findFD(struct list *l, int fd){
     }
     return NULL;
 }
+
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -70,6 +63,15 @@ check_string(uint8_t *start){
 }
 
 //GLOBAL static semaphore for file-sys
+static struct semaphore sema;
+
+void
+syscall_init (void)
+{
+  sema_init(&sema, 1);
+  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+}
+
 
 
 static void

@@ -188,6 +188,7 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
 //  list_init(&t->fdt);
   if(t != initial_thread->tid){
+    t->c->tid=t->tid;
     t->parent=thread_current();
     list_push_back (&t->parent->children, &t->c->childelem);
   }
@@ -478,9 +479,10 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->fdt);
   if(t != initial_thread){
     t->c=(struct child_sema *)malloc(sizeof(struct child_sema));
+//    t->c->waited = false;
     sema_init (&t->c->p_sema,0);
     sema_init (&t->c->sema,0);
-    t->c->tid=t->tid;
+
   }
 
   old_level = intr_disable ();

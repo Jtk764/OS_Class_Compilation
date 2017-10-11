@@ -133,6 +133,7 @@ main (void)
   run_actions (argv);
 
   /* Finish up. */
+//  printf("this is a test\n");
   shutdown ();
   thread_exit ();
 }

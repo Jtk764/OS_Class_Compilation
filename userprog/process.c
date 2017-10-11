@@ -56,7 +56,7 @@ char* create_arg_list (char* cmdline){
   char *saveptr;
   int  byte_length=0;
   char *curr=strtok_r(cmdline, " ", &saveptr);
-  while (curr != NULL ){
+  while (*curr != NULL ){
     if(newCommand(curr) == NULL ) return NULL;
     listlength++;
     byte_length+=(strlen(curr)+1);
@@ -114,9 +114,10 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   //tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   tid = thread_create (create_arg_list(fn_copy), PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR){
     palloc_free_page (fn_copy);
     free_arg_list();
+  }
   return tid;
 }
 
@@ -164,16 +165,18 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
 //  while(1);
 
   //remove child element from parent thread
   struct list_elem *e;
   struct thread *current = thread_current();
+  tid_t temp;
   for(e = list_begin(&current->children); e != list_end(&current->children); e = list_next(e)){
-    if(&list_entry(e, struct child_sema, childelem)->tid == child_tid){
-      if(&list_entry(e, struct child_sema, childelem)->waited) return -1;
+    temp = list_entry(e, struct child_sema, childelem)->tid;
+    if(list_entry(e, struct child_sema, childelem)->tid == child_tid){
+      if(list_entry(e, struct child_sema, childelem)->waited) return -1;
       list_entry(e, struct child_sema, childelem)->waited = true;
       sema_down(&list_entry(e, struct child_sema, childelem)->sema);
       return list_entry(e, struct child_sema, childelem)->status;
