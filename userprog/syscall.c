@@ -62,6 +62,19 @@ check_string(uint8_t *start){
     return false;
 }
 
+static bool
+check_string2(uint8_t *start, int length){
+    char temp;
+    int i = 0;
+    if(start > PHYS_BASE) return false;
+    while( i < length ){
+        if ( get_user(start + i) == -1) return false;
+        i++;
+        if((start + i)> PHYS_BASE) return false;
+    }
+    return true;
+}
+
 //GLOBAL static semaphore for file-sys
 static struct semaphore sema;
 
@@ -198,14 +211,14 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_WRITE:
-            if(!check_string((uint8_t *)(call + 2))) thread_exit();
+            if(!check_string2((uint8_t *)(call + 2), (uint8_t *)*(call + 3))) thread_exit();
             sema_down(&sema);
             if(*(call + 1) == 1){
                 int i;
                 for(i = 0; i + 250< *(call + 3); i = i+250){
                     putbuf(*(uint8_t*)(*(call+2) + i), (size_t) 250);
                 }
-                putbuf(*(uint8_t*)(*(call + 2) + i), (size_t)(*(call+3) - i));
+                putbuf((uint8_t *)(*(call + 2) + i), (size_t)(*(call+3) - i));
                 (f->eax) = *(call + 3);
             }
             else{
