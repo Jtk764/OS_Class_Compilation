@@ -55,13 +55,13 @@ char* create_arg_list (char* cmdline){
   list_init(&args_list);
   char *saveptr;
   int  byte_length=0;
-  char *curr=strtok_r(cmdline, " ", &saveptr);
+  volatile char *curr=strtok_r(cmdline, " ", &saveptr);
   char *returnval;
-  while (*curr != NULL ){
+  while (curr != NULL ){
     if(newCommand(curr) == NULL ) return NULL;
     listlength++;
     byte_length+=(strlen(curr)+1);
-    *curr=strtok_r(NULL, " ", &saveptr);
+    curr=strtok_r(NULL, " ", &saveptr);
   }
   if(byte_length%4 != 0) {
       struct command* retval= malloc(sizeof( struct command));
@@ -524,6 +524,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+
+char *strrev(char *str)
+{
+      char *p1, *p2;
+
+      if (! str || ! *str)
+            return str;
+      for (p1 = str, p2 = str + strlen(str) - 1; p2 > p1; ++p1, --p2)
+      {
+            *p1 ^= *p2;
+            *p2 ^= *p1;
+            *p1 ^= *p2;
+      }
+      return str;
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -534,6 +550,7 @@ setup_stack (void **esp)
   bool success = false;
   int * argsv = calloc(listlength,sizeof(int)); 
   int j;
+  int temp;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
@@ -559,8 +576,9 @@ setup_stack (void **esp)
         *esp+=-4;
         memcpy(*esp, &argsv[j], 4);
         }
+        temp=*esp;
         *esp+=-4;
-        memcpy(*esp, *esp+4, 4);
+        memcpy(*esp, &temp, 4);
         *esp+=-4;
         memcpy(*esp, &i, 4);
         *esp+=-4;
@@ -568,7 +586,7 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-  hex_dump(*esp, *esp, 40, true);
+  //hex_dump(*esp, *esp, 41, true);
   free(argsv);
   free_arg_list();
   return success;
