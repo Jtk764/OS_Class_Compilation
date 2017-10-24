@@ -112,8 +112,9 @@ syscall_handler (struct intr_frame *f UNUSED)
                     list_entry(e, struct child_sema, childelem)->status = *(call + 1);
                 }
             }
-            length = strlen(name) + strlen(exitcode) + 1 + strlen(codeEnd)+1;
-            snprintf(result, length+1, "%s%s%d%s\n", name, exitcode, *(call+1), codeEnd);
+
+/*          length = strlen(name) + strlen(exitcode) + 1 + strlen(codeEnd)+1;
+            snprintf(result, length, "%s%s%d%s", name, exitcode, *(call+1), codeEnd);
 
 /*
             strlcpy(result, name, (strlen(name)+1)*sizeof(char));
@@ -126,9 +127,13 @@ syscall_handler (struct intr_frame *f UNUSED)
             length += 1;
             strlcat(result, codeEnd, (length + strlen(codeEnd)+1)*sizeof(char));
             length += strlen(codeEnd);
+
+            putbuf(result, length);
 */
-            putbuf(result, length+1);
+            printf("%s%s%d%s\n", name, exitcode, *(call+1), codeEnd);
+
             thread_exit();
+            break;
 
         case SYS_WAIT:
             process_wait((tid_t) *(call + 1));
