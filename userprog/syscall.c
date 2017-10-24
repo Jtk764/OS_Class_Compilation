@@ -8,6 +8,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "filesys/file.h" 
+#include <string.h>
 
 static void syscall_handler (struct intr_frame *);
 
@@ -94,6 +95,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     //TODO VERIFY POINTERS ARE ABOVE PHYSBASE
     uint32_t* call = f->esp;          //pointer to the stack, points to syscall number, then each argument
     struct thread *current = thread_current();
+    char result[50];
+    char exitcode[] = ": exit(";
+    char codeEnd[] = ")";
+    int length;
+    char* name = thread_name();
     switch(*call) {
         case SYS_HALT:
             shutdown_power_off();
@@ -106,6 +112,22 @@ syscall_handler (struct intr_frame *f UNUSED)
                     list_entry(e, struct child_sema, childelem)->status = *(call + 1);
                 }
             }
+            length = strlen(name) + strlen(exitcode) + 1 + strlen(codeEnd)+1;
+            snprintf(result, length+1, "%s%s%d%s\n", name, exitcode, *(call+1), codeEnd);
+
+/*
+            strlcpy(result, name, (strlen(name)+1)*sizeof(char));
+            length = strlen(name);
+            strlcat(result, exitcode, (length + strlen(exitcode) + 1)*sizeof(char));
+            length += strlen(exitcode);
+            int temp = *(call + 1);
+            result[length] = temp;
+            result[length + 1] = '\0';
+            length += 1;
+            strlcat(result, codeEnd, (length + strlen(codeEnd)+1)*sizeof(char));
+            length += strlen(codeEnd);
+*/
+            putbuf(result, length+1);
             thread_exit();
 
         case SYS_WAIT:
