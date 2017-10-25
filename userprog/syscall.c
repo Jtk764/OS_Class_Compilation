@@ -86,7 +86,10 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-
+bool check_sp(char * esp, int num){
+    if ((uint32_t*)esp+num > PHYS_BASE) return false;
+    return true;
+}
 
 static void
 syscall_handler (struct intr_frame *f UNUSED)
@@ -99,7 +102,16 @@ syscall_handler (struct intr_frame *f UNUSED)
     char exitcode[] = ": exit(";
     char codeEnd[] = ")";
     int length;
+    int test=-1;
     char* name = thread_name();
+    if ( f->esp > PHYS_BASE ){  
+        printf("%s: exit(%d)\n", name, test);
+        thread_exit(); 
+        return;}
+    if (get_user(call) == -1){  
+        printf("%s: exit(%d)\n", name, test);
+        thread_exit(); 
+        return;}
     switch(*call) {
         case SYS_HALT:
             shutdown_power_off();
@@ -130,8 +142,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
             putbuf(result, length);
 */
-            printf("%s%s%d%s\n", name, exitcode, *(call+1), codeEnd);
-
+            if (!check_sp(call, 8)) printf("%s: exit(%d)\n", name, test);
+            else printf("%s%s%i%s\n", name, exitcode, *(call+1), codeEnd);
             thread_exit();
             break;
 
@@ -140,7 +152,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
         case SYS_EXEC:
             //check the command line string for seg faults
-            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            if(!check_string((uint8_t *)(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
 
             //process execute should handle the token parsing for the argument to exec            
             tid_t thd;
@@ -159,19 +171,19 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_CREATE:
-            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            if(!check_string((uint8_t *)(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
             sema_down(&sema);
             (f->eax) = filesys_create(*(call+1), *(call+2));
             sema_up(&sema);
             break;
         case SYS_REMOVE:
-            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            if(!check_string((uint8_t *)(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
             sema_down(&sema);
             (f->eax) = filesys_remove(*(call+1));
             sema_up(&sema);
             break;
         case SYS_OPEN:
-            if(!check_string((uint8_t *)(call + 1))) thread_exit();
+            if(!check_string((uint8_t *)(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
             sema_down(&sema);
             struct file *ret;
             if((ret = filesys_open(*(call+1)) == NULL)) (f->eax) = -1;
@@ -220,7 +232,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_READ:
-            if(!check_string((uint8_t *)(call + 2))) thread_exit();
+            if(!check_string((uint8_t *)(call + 2))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
             sema_down(&sema);
             if(*(call + 1) == 0){
                 int i;
@@ -238,7 +250,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_WRITE:
-            if(!check_string2((uint8_t *)(call + 2), (uint8_t *)*(call + 3))) thread_exit();
+            if(!check_string2((uint8_t *)(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
             sema_down(&sema);
             if(*(call + 1) == 1){
                 int i;
