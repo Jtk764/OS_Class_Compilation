@@ -54,11 +54,11 @@ static bool
 check_string(char *start){
     char temp;
     int i = 0;
-    if(start > PHYS_BASE) return false;
+    if(start >= PHYS_BASE) return false;
     temp = get_user(start + i);
     while(temp != -1 && temp != NULL){
         i++;
-        if((start + i)> PHYS_BASE) return false;
+        if((start + i)>= PHYS_BASE) return false;
         temp = get_user(start+i);
     }
     if(temp == NULL) return true;
@@ -69,11 +69,11 @@ static bool
 check_string2(uint8_t *start, int length){
     char temp;
     int i = 0;
-    if(start > PHYS_BASE) return false;
+    if(start >= PHYS_BASE) return false;
     while( i < length ){
         if ( get_user(start + i) == -1) return false;
         i++;
-        if((start + i)> PHYS_BASE) return false;
+        if((start + i)>= PHYS_BASE) return false;
     }
     return true;
 }
@@ -303,7 +303,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                 thread_exit();
                 break;
             }
-            file_seek(&fl->f, (call + 2));
+            file_seek(fl->f, *(call + 2));
             sema_up(&sema);
 
         case SYS_TELL:

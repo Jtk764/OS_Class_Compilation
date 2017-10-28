@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "filesys/file.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -290,13 +291,14 @@ void
 thread_exit (void)
 {
   ASSERT (!intr_context ());
+   if( thread_current()->file != NULL ) file_close(thread_current()->file);
   sema_up(&thread_current ()->c->sema);
 #ifdef USERPROG
   process_exit ();
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
-     and schedule another process.  That process will destroy us
+     and schedule another process.  That process will destroy usF
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
