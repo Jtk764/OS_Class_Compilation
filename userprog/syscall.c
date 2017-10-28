@@ -110,10 +110,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     struct file *ret;
     if ( f->esp > PHYS_BASE ){  
         printf("%s: exit(%d)\n", name, test);
+        thread_current ()->c->status=-1;
         thread_exit(); 
         return;}
     if (get_user(call) == -1){  
         printf("%s: exit(%d)\n", name, test);
+        thread_current ()->c->status=-1;
         thread_exit(); 
         return;}
     switch(*call) {
@@ -146,17 +148,17 @@ syscall_handler (struct intr_frame *f UNUSED)
 
             putbuf(result, length);
 */
-            if (!check_sp(call, 8)) printf("%s: exit(%d)\n", name, test);
+            if (!check_sp(call, 8)) {printf("%s: exit(%d)\n", name, test); thread_current ()->c->status=-1;}
             else printf("%s%s%i%s\n", name, exitcode, *(call+1), codeEnd);
             thread_exit();
             break;
 
         case SYS_WAIT:
-            process_wait((tid_t) *(call + 1));
+           (f->eax)=process_wait((tid_t) *(call + 1));
             break;
         case SYS_EXEC:
             //check the command line string for seg faults
-            if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
+            if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
 
             //process execute should handle the token parsing for the argument to exec            
             tid_t thd;
@@ -168,27 +170,29 @@ syscall_handler (struct intr_frame *f UNUSED)
                 for(e = list_begin(&current->children); e != list_end(&current->children); e = list_next(e)){
                     if(list_entry(e, struct child_sema, childelem)->tid == thd){
                         sema_down(&list_entry(e, struct child_sema, childelem)->p_sema);
+                        if (list_entry(e, struct child_sema, childelem)->status != -1) (f->eax) = (uint32_t)thd;
+                        else f->eax=-1;
+                        break;
                     }
                 }
-                (f->eax) = (uint32_t)thd;
             //wait on semaphore to be updated from child when it executes
             }
             sema_up(&sema);
             break;
         case SYS_CREATE:
-            if(!check_string((char*)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
+            if(!check_string((char*)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
             (f->eax) = filesys_create(*(call+1), *(call+2));
             sema_up(&sema);
             break;
         case SYS_REMOVE:
-            if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
+            if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
             (f->eax) = filesys_remove(*(call+1));
             sema_up(&sema);
             break;
         case SYS_OPEN:
-            if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
+            if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
             ret = filesys_open(*(call+1));
             if(ret == NULL) (f->eax) = -1;
@@ -235,6 +239,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             fl = findFD(&(current->fdt), *(call + 1));
             if(fl == NULL){
                 printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
                 sema_up(&sema);
                 thread_exit();
                 break;
@@ -243,7 +248,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_READ:
-            if(!check_string2((uint8_t *)*(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
+            if(!check_string2((uint8_t *)*(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
             if(*(call + 1) == 0){
                 int i;
@@ -256,6 +261,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             fl = findFD(&(current->fdt), *(call + 1));
             if(fl == NULL){
                 printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
                 sema_up(&sema);
                 thread_exit();
                 break;
@@ -264,7 +270,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_WRITE:
-            if(!check_string2((uint8_t *)*(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_exit(); }
+            if(!check_string2((uint8_t *)*(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
             if(*(call + 1) == 1){
                 int i;
@@ -278,6 +284,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                 fl = findFD(&(current->fdt), *(call + 1));
                 if(fl == NULL){
                     printf("%s: exit(%d)\n", name, test);
+                    thread_current ()->c->status=-1;
                     sema_up(&sema);
                     thread_exit();
                     break;
@@ -291,6 +298,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             fl = findFD(&(current->fdt), *(call + 1));
             if(fl == NULL){
                 printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
                 sema_up(&sema);
                 thread_exit();
                 break;
@@ -303,6 +311,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             fl = findFD(&(current->fdt), *(call + 1));
             if(fl == NULL){
                 printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
                 sema_up(&sema);
                 thread_exit();
                 break;
@@ -317,6 +326,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             if(fl == NULL){
  //               printf("uh oh");
                 printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
                 sema_up(&sema);
                 thread_exit();
                 break;

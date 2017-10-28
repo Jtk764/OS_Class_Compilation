@@ -145,8 +145,10 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   if (!success){
-    thread_exit ();
+    sema_up(&thread_current()->c->p_sema);
     free_arg_list();
+    thread_current()->c->status=-1;
+    thread_exit ();
   }
   sema_up(&thread_current()->c->p_sema);
 
