@@ -122,6 +122,7 @@ struct thread
     struct list_elem elem;              /* List element. */
     
     struct thread* parent;              /* the threads parent */
+    struct file *file;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
