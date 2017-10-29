@@ -102,6 +102,30 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();  
 }
 
+
+void free_child(){
+  struct child_sema* c;
+  while (!list_empty (&thread_current()->children))
+     {
+      struct list_elem *e = list_pop_front (&thread_current()->children);
+      c=list_entry (e, struct child_sema, childelem);
+      free(c);
+     }
+}
+
+void free_fdt(){
+  struct fdesc* c;
+  while (!list_empty (&thread_current()->fdt))
+     {
+      struct list_elem *e = list_pop_front (&thread_current()->fdt);
+      c=list_entry (e, struct fdesc, elem);
+      file_close(c->f);
+      free(c);
+     }
+}
+
+
+
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
 void
@@ -292,6 +316,8 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
    if( thread_current()->file != NULL ) file_close(thread_current()->file);
+   free_child();
+   free_fdt();
   sema_up(&thread_current ()->c->sema);
 #ifdef USERPROG
   process_exit ();

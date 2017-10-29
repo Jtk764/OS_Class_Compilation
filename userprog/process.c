@@ -150,6 +150,7 @@ start_process (void *file_name_)
     thread_current()->c->status=-1;
     thread_exit ();
   }
+  free_arg_list();
   sema_up(&thread_current()->c->p_sema);
 
   /* Start the user process by simulating a return from an
@@ -592,7 +593,6 @@ setup_stack (void **esp)
     }
   //hex_dump(*esp, *esp, 41, true);
   free(argsv);
-  free_arg_list();
   return success;
 }
 
