@@ -235,8 +235,8 @@ save_evicted_frame (struct frame *vf)
   if (spte == NULL)
     {
       spte = calloc(1, sizeof *spte);
-      spte->upageddr = vf->upage;
-      spte->type = SWAP;
+      spte->upageaddr = vf->upage;
+      spte->in_sawp = true;
       if (!insert_suppl_pte (&t->suppl_page_table, spte))
         return false;
     }
@@ -245,19 +245,15 @@ save_evicted_frame (struct frame *vf)
   /* if the page is dirty, put into swap
    * if a page is not dirty and is not a file, then it is a stack,
    * it needs to put into swap*/
-  if (pagedir_is_dirty (t->pagedir, spte->upageddr)
-      && (spte->type == MMF))
+
+  if (pagedir_is_dirty (t->pagedir, spte->upageaddr)
+           || (!spte->is_file))
     {
-      write_page_back_to_file_wo_lock (spte);
-    }
-  else if (pagedir_is_dirty (t->pagedir, spte->upageddr)
-           || (spte->type != FILE))
-    {
-      swap_slot_idx = vm_swap_out (spte->upageddr);
+      swap_slot_idx = vm_swap_out (spte->upageaddr);
       if (swap_slot_idx == SWAP_ERROR)
         return false;
 
-      spte->type = spte->type | SWAP;
+      spte->in_swap = spte->TRUE;
     }
   /* else if the page clean or read-only, do nothing */
 
@@ -270,7 +266,7 @@ save_evicted_frame (struct frame *vf)
   spte->is_loaded = false;
 
   /* unmap it from user's pagedir, free vm page/frame */
-  pagedir_clear_page (t->pagedir, spte->upageddr);
+  pagedir_clear_page (t->pagedir, spte->upageaddr);
 
   return true;
 }

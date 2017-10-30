@@ -10,11 +10,11 @@
 
 struct suppl_pte_data;
   {
-    struct file * file;
-    off_t ofs;
+    struct file * file; //file
+    off_t ofs;			// offset in file
     uint32_t read_bytes;
     uint32_t zero_bytes;
-    bool writable;
+    bool writable;		 //if writable
 } 
 
 struct suppl_pte
@@ -22,7 +22,7 @@ struct suppl_pte
   void *upageddr;   //user virtual address as the unique identifier of a page
   struct suppl_pte_data data;
   bool is_loaded;
-
+  bool in_swap;
   /* reserved for possible swapping */
   size_t swap_slot_idx;
   bool swap_writable;
