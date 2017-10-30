@@ -39,3 +39,7 @@ void swapFromDisk(size_t swapIndex, void *virtualAddr){
 	}
 }
 
+void toggleSwap(size_t swapIndex){
+	bitmap_flip(swapSpace, swapIndex);
+}
+
