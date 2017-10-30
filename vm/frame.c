@@ -11,6 +11,7 @@
 #include "vm/swap.h"
 #include <stdbool.h>
 #include "vm/frame.h"
+#include "threads/thread.h"
 
 static struct lock frametable_lock;
 static struct lock eviction_lock;
@@ -19,7 +20,7 @@ static struct lock vm_lock;
 void frame_init ()
 {
   list_init (&frames);
-  lock_init (&frametable_lock_lock);
+  lock_init (&frametable_lock);
   lock_init (&eviction_lock);
   lock_init (&vm_lock);
 }
@@ -44,7 +45,7 @@ frame_to_evict ()
       while ((e = list_next (e)) != list_tail (&frames))
         {
           vf = list_entry (e, struct frame, elem);
-          t = thread_get_by_id (vf->tid);
+          t = get_thread_by_id (vf->tid);
           bool accessed  = pagedir_is_accessed (t->pagedir, vf->upage);
           if (!accessed)
             {
@@ -75,7 +76,7 @@ save_evicted_frame (struct frame *vf)
   struct suppl_pte *spte;
 
   /* Get corresponding thread frame->tid's suppl page table */
-  t = thread_get_by_id (vf->tid);
+  t = get_thread_by_id (vf->tid);
 
   /* Get suppl page table entry corresponding to frame->upage */
   spte = get_suppl_pte (&t->spt, vf->upage);
@@ -100,10 +101,10 @@ save_evicted_frame (struct frame *vf)
            || (!spte->is_file))
     {
       swapIndex = swapToDisk (spte->upageaddr);
-      if (swapIndex == SWAP_ERROR)
+      if (swapIndex == NULL)
         return false;
 
-      spte->in_swap = spte->true;
+      spte->in_swap = true;
     }
   /* else if the page clean or read-only, do nothing */
 

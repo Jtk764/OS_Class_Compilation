@@ -9,6 +9,7 @@
 #include "threads/vaddr.h"
 #include "filesys/file.h" 
 #include <string.h>
+#include <stdbool.h>
 #include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);

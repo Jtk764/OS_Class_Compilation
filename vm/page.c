@@ -16,7 +16,7 @@ suppl_pt_hash (const struct hash_elem *he, void *aux UNUSED)
 {
   const struct suppl_pte *vspte;
   vspte = hash_entry (he, struct suppl_pte, elem);
-  return hash_bytes (&vspte->uvaddr, sizeof vspte->uvaddr);
+  return hash_bytes (&vspte->upageaddr, sizeof vspte->upageaddr);
 }
 
 /* Functionality required by hash table*/
@@ -31,17 +31,26 @@ suppl_pt_less (const struct hash_elem *hea,
   vsptea = hash_entry (hea, struct suppl_pte, elem);
   vspteb = hash_entry (heb, struct suppl_pte, elem);
 
-  return (vsptea->uvaddr - vspteb->uvaddr) < 0;
+  return (vsptea->upageaddr - vspteb->upageaddr) < 0;
 }
 
+struct suppl_pte *
+get_suppl_pte (struct hash *ht, void *upageaddr)
+{
+  struct suppl_pte spte;
+  struct hash_elem *e;
 
+  spte.upageaddr = upageaddr;
+  e = hash_find (ht, &spte.elem);
+  return e != NULL ? hash_entry (e, struct suppl_pte, elem) : NULL;
+}
 
 static bool
 load_page_file (struct suppl_pte *spte)
 {
   struct thread *cur = thread_current ();
   
-  file_seek (spte->data.file_page.file, spte->data.file_page.ofs);
+  file_seek (spte->data.file, spte->data.ofs);
 
   /* Get a page of memory. */
   uint8_t *kpage = allocate_frame (PAL_USER);
@@ -49,20 +58,20 @@ load_page_file (struct suppl_pte *spte)
     return false;
   
   /* Load this page. */
-  if (file_read (spte->data.file_page.file, kpage,
-		 spte->data.file_page.read_bytes)
+  if (file_read (spte->data.file, kpage,
+		 spte->data.read_bytes)
       
-      != (int) spte->data.file_page.read_bytes)
+      != (int) spte->data.read_bytes)
     {
       free_frame (kpage);
       return false; 
     }
-  memset (kpage + spte->data.file_page.read_bytes, 0,
-	  spte->data.file_page.zero_bytes);
+  memset (kpage + spte->data.read_bytes, 0,
+	  spte->data.zero_bytes);
   
   /* Add the page to the process's address space. */
   if (!pagedir_set_page (cur->pagedir, spte->upageaddr, kpage,
-			 spte->data.file_page.writable))
+			 spte->data.writable))
     {
       free_frame (kpage);
       return false; 
@@ -71,6 +80,7 @@ load_page_file (struct suppl_pte *spte)
   spte->is_loaded = true;
   return true;
 }
+
 
 static bool
 load_page_swap (struct suppl_pte *spte)
@@ -94,7 +104,7 @@ load_page_swap (struct suppl_pte *spte)
   if (spte->in_swap)
     {
       /* After swap in, remove the corresponding entry in suppl page table */
-      hash_delete (&thread_current ()->suppl_page_table, &spte->elem);
+      hash_delete (&thread_current ()->spt, &spte->elem);
     }
   if (spte->in_swap && spte->is_file)
     {
@@ -103,6 +113,17 @@ load_page_swap (struct suppl_pte *spte)
     }
 
   return true;
+}
+
+bool
+load_page (struct suppl_pte *spte)
+{
+  bool success = false;
+
+  if(spte->in_swap)  success = load_page_swap (spte);
+  else if(spte->is_file) success = load_page_file (spte);
+
+  return success;
 }
 
 static void
@@ -145,14 +166,14 @@ suppl_pt_insert_file (struct file *file, off_t ofs, uint8_t *upage,
     return false;
   
   spte->upageaddr = upage;
-  spte->data.file_page.file = file;
-  spte->data.file_page.ofs = ofs;
-  spte->data.file_page.read_bytes = read_bytes;
-  spte->data.file_page.zero_bytes = zero_bytes;
-  spte->data.file_page.writable = writable;
+  spte->data.file = file;
+  spte->data.ofs = ofs;
+  spte->data.read_bytes = read_bytes;
+  spte->data.zero_bytes = zero_bytes;
+  spte->data.writable = writable;
   spte->is_loaded = false;
       
-  result = hash_insert (&cur->suppl_page_table, &spte->elem);
+  result = hash_insert (&cur->spt, &spte->elem);
   if (result != NULL)
     return false;
 

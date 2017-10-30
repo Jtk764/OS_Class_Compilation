@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
+#include <stdbool.h>
 
 
 

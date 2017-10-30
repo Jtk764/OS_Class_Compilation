@@ -4,7 +4,7 @@
 
 static struct block *swapPartition;
 
-static size_t pageSectors = PGSIZE/BLOCK_SECTOR_SIZE
+static size_t pageSectors = PGSIZE/BLOCK_SECTOR_SIZE;
 static struct bitmap *swapSpace;
 
 void init_swap() {

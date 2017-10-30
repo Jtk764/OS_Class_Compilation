@@ -8,6 +8,7 @@
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
 #include "filesys/file.h"
+#include <stdbool.h>
 
 struct suppl_pte_data
   {
@@ -38,7 +39,7 @@ unsigned suppl_pt_hash (const struct hash_elem *, void * UNUSED);
 bool suppl_pt_less (const struct hash_elem *, 
 		    const struct hash_elem *,
 		    void * UNUSED);
-
+struct suppl_pte *get_suppl_pte (struct hash *, void *);
 bool insert_suppl_pte (struct hash *, struct suppl_pte *);
 
 bool suppl_pt_insert_file ( struct file *, off_t, uint8_t *, 
