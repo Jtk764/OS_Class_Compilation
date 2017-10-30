@@ -1,0 +1,14 @@
+#ifndef VM_SWAP_H
+#define VM_SWAP_H
+
+
+/*init function*/
+void init_swap();
+
+/*swap a frame into swap partition*/
+size_t swapToDisk(const void *);
+
+/*swap a frame out of swap partition*/
+void swapFromDisk(size_t, void *);
+
+#endif /* vm/swap.h */
