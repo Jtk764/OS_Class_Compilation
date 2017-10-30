@@ -9,19 +9,117 @@
 #include "vm/page.h"
 #include "threads/pte.h"
 #include "vm/swap.h"
-
+#include <stdbool.h>
 #include "vm/frame.h"
 
 static struct lock frametable_lock;
 static struct lock eviction_lock;
+static struct lock vm_lock;
 
 void frame_init ()
 {
   list_init (&frames);
   lock_init (&frametable_lock_lock);
   lock_init (&eviction_lock);
+  lock_init (&vm_lock);
 }
 
+
+static struct frame *
+frame_to_evict ()
+{
+  struct frame *vf;
+  struct thread *t;
+  struct list_elem *e;
+
+  struct frame *vf_class0 = NULL;
+
+  int round_count = 1;
+  bool found = false;
+
+  while (!found)
+    {
+
+      e = list_head (&frames);
+      while ((e = list_next (e)) != list_tail (&frames))
+        {
+          vf = list_entry (e, struct frame, elem);
+          t = thread_get_by_id (vf->tid);
+          bool accessed  = pagedir_is_accessed (t->pagedir, vf->upage);
+          if (!accessed)
+            {
+              vf_class0 = vf;
+              list_remove (e);
+              list_push_back (&frames, e);
+              break;
+            }
+          else
+            {
+              pagedir_set_accessed (t->pagedir, vf->upage, false);
+            }
+        }
+
+      if (vf_class0 != NULL)
+        found = true;
+      else if (round_count++ == 2)
+        found = true;
+    }
+
+  return vf_class0;
+}
+
+static bool
+save_evicted_frame (struct frame *vf)
+{
+  struct thread *t;
+  struct suppl_pte *spte;
+
+  /* Get corresponding thread frame->tid's suppl page table */
+  t = thread_get_by_id (vf->tid);
+
+  /* Get suppl page table entry corresponding to frame->upage */
+  spte = get_suppl_pte (&t->spt, vf->upage);
+
+  /* if no suppl page table entry is found, create one and insert it
+     into suppl page table */
+  if (spte == NULL)
+    {
+      spte = calloc(1, sizeof *spte);
+      spte->upageaddr = vf->upage;
+      spte->in_swap = true;
+      if (!insert_suppl_pte (&t->spt, spte))
+        return false;
+    }
+
+  size_t swapIndex;
+  /* if the page is dirty, put into swap
+   * if a page is not dirty and is not a file, then it is a stack,
+   * it needs to put into swap*/
+
+  if (pagedir_is_dirty (t->pagedir, spte->upageaddr)
+           || (!spte->is_file))
+    {
+      swapIndex = swapToDisk (spte->upageaddr);
+      if (swapIndex == SWAP_ERROR)
+        return false;
+
+      spte->in_swap = spte->true;
+    }
+  /* else if the page clean or read-only, do nothing */
+
+  memset (vf->frame, 0, PGSIZE);
+  /* update the swap attributes, including swapIndex,
+     and swap_writable */
+  spte->swapIndex = swapIndex;
+  spte->swap_writable = *(vf->pte) & PTE_W;
+
+  spte->is_loaded = false;
+
+  /* unmap it from user's pagedir, free vm page/frame */
+  pagedir_clear_page (t->pagedir, spte->upageaddr);
+
+  return true;
+}
 
 /* Remove the entry from frame table and free the memory space */
 static void
@@ -133,8 +231,7 @@ allocate_frame (enum palloc_flags flags)
     }
 
   /* if succeed, add to frame list
-     otherwise, should evict one page to swap, but fail the allocator
-     for now */
+     otherwise */
   if (frame != NULL)
     add_frame (frame);
   else
@@ -168,108 +265,8 @@ assign_frame (void *frame, uint32_t *pte, void *upage)
 
 
 
-/* select a frame to evict */
-static struct frame *
-frame_to_evict ()
-{
-  struct frame *vf;
-  struct thread *t;
-  struct list_elem *e;
 
-  struct frame *vf_class0 = NULL;
 
-  int round_count = 1;
-  bool found = false;
-  /* iterate each entry in frame table */
-  while (!found)
-    {
-      /* go through the vm frame list, try to locate the first encounter
-         of each class of the four. The goal is to find a (0,0) class,
-         if found, the break eviction selecting is ended,
-         if not, set the reference/accessed bit to 0 of each page.
-         The maxium round is 2, which is one scan after all the reference
-         bit are set to 0, if we still cannot find (0,0), we have to live
-         with the first encounter of the lowest nonempty class*/
-      e = list_head (&frames);
-      while ((e = list_next (e)) != list_tail (&frames))
-        {
-          vf = list_entry (e, struct frame, elem);
-          t = thread_get_by_id (vf->tid);
-          bool accessed  = pagedir_is_accessed (t->pagedir, vf->upage);
-          if (!accessed)
-            {
-              vf_class0 = vf;
-              list_remove (e);
-              list_push_back (&frames, e);
-              break;
-            }
-          else
-            {
-              pagedir_set_accessed (t->pagedir, vf->upage, false);
-            }
-        }
-
-      if (vf_class0 != NULL)
-        found = true;
-      else if (round_count++ == 2)
-        found = true;
-    }
-
-  return vf_class0;
-}
-
-static bool
-save_evicted_frame (struct frame *vf)
-{
-  struct thread *t;
-  struct suppl_pte *spte;
-
-  /* Get corresponding thread frame->tid's suppl page table */
-  t = thread_get_by_id (vf->tid);
-
-  /* Get suppl page table entry corresponding to frame->upage */
-  spte = get_suppl_pte (&t->suppl_page_table, vf->upage);
-
-  /* if no suppl page table entry is found, create one and insert it
-     into suppl page table */
-  if (spte == NULL)
-    {
-      spte = calloc(1, sizeof *spte);
-      spte->upageaddr = vf->upage;
-      spte->in_sawp = true;
-      if (!insert_suppl_pte (&t->suppl_page_table, spte))
-        return false;
-    }
-
-  size_t swap_slot_idx;
-  /* if the page is dirty, put into swap
-   * if a page is not dirty and is not a file, then it is a stack,
-   * it needs to put into swap*/
-
-  if (pagedir_is_dirty (t->pagedir, spte->upageaddr)
-           || (!spte->is_file))
-    {
-      swap_slot_idx = vm_swap_out (spte->upageaddr);
-      if (swap_slot_idx == SWAP_ERROR)
-        return false;
-
-      spte->in_swap = spte->TRUE;
-    }
-  /* else if the page clean or read-only, do nothing */
-
-  memset (vf->frame, 0, PGSIZE);
-  /* update the swap attributes, including swap_slot_idx,
-     and swap_writable */
-  spte->swap_slot_idx = swap_slot_idx;
-  spte->swap_writable = *(vf->pte) & PTE_W;
-
-  spte->is_loaded = false;
-
-  /* unmap it from user's pagedir, free vm page/frame */
-  pagedir_clear_page (t->pagedir, spte->upageaddr);
-
-  return true;
-}
 
 
 

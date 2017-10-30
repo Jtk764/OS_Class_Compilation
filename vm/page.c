@@ -11,6 +11,31 @@
 
 
 
+unsigned
+suppl_pt_hash (const struct hash_elem *he, void *aux UNUSED)
+{
+  const struct suppl_pte *vspte;
+  vspte = hash_entry (he, struct suppl_pte, elem);
+  return hash_bytes (&vspte->uvaddr, sizeof vspte->uvaddr);
+}
+
+/* Functionality required by hash table*/
+bool
+suppl_pt_less (const struct hash_elem *hea,
+               const struct hash_elem *heb,
+	       void *aux UNUSED)
+{
+  const struct suppl_pte *vsptea;
+  const struct suppl_pte *vspteb;
+ 
+  vsptea = hash_entry (hea, struct suppl_pte, elem);
+  vspteb = hash_entry (heb, struct suppl_pte, elem);
+
+  return (vsptea->uvaddr - vspteb->uvaddr) < 0;
+}
+
+
+
 static bool
 load_page_file (struct suppl_pte *spte)
 {
@@ -51,7 +76,7 @@ static bool
 load_page_swap (struct suppl_pte *spte)
 {
   /* Get a page of memory. */
-  uint8_t *kpage = vm_allocate_frame (PAL_USER);
+  uint8_t *kpage = allocate_frame (PAL_USER);
   if (kpage == NULL)
     return false;
  
@@ -59,12 +84,12 @@ load_page_swap (struct suppl_pte *spte)
   if (!pagedir_set_page (thread_current ()->pagedir, spte->upageaddr, kpage, 
 			 spte->swap_writable))
     {
-      vm_free_frame (kpage);
+      free_frame (kpage);
       return false;
     }
  
   /* Swap data from disk into memory page */
-  vm_swap_in (spte->swap_slot_idx, spte->upageaddr);
+  swapFromDisk (spte->swapIndex, spte->upageaddr);
 
   if (spte->in_swap)
     {
@@ -86,7 +111,7 @@ free_suppl_pte (struct hash_elem *e, void *aux UNUSED)
   struct suppl_pte *spte;
   spte = hash_entry (e, struct suppl_pte, elem);
   if (spte->in_swap)
-    vm_clear_swap_slot (spte->swap_slot_idx);
+    toggleSwap (spte->swapIndex);
 
   free (spte);
 }
@@ -149,4 +174,9 @@ void grow_stack (void *upageaddr)
 	  free_frame (spage); 
 	}
     }
+}
+
+void free_suppl_pt (struct hash *suppl_pt) 
+{
+  hash_destroy (suppl_pt, free_suppl_pte);
 }

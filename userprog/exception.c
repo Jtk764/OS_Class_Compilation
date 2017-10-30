@@ -4,6 +4,8 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
+#include "vm/page.h"
 
 
 
@@ -129,6 +131,8 @@ page_fault (struct intr_frame *f)
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
+  struct suppl_pte* spte;
+  struct thread* cur=thread_current();
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -153,23 +157,28 @@ page_fault (struct intr_frame *f)
 
 
 
-  if (!user){
-    f->eip = (void (*)(void))f->eax;
-    f->eax= 0xffffffff;
-    return;
-  }
   
+  if (fault_addr == NULL || !not_present || !is_user_vaddr(fault_addr)){
     thread_current ()->c->status=-1;
     printf("%s: exit(%d)\n", thread_name(), -1);
     thread_exit();
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  }
+
+  
+  spte = get_suppl_pte (&cur->spt, pg_round_down(fault_addr));
+  if (spte != NULL && !spte->is_loaded)
+    load_page (spte);
+  else if (spte == NULL && fault_addr >= (f->esp - 32) && 
+     (PHYS_BASE - pg_round_down (fault_addr)) <= STACK_SIZE)
+    grow_stack (fault_addr);
+  else
+    {
+      if (!pagedir_get_page (cur->pagedir, fault_addr)){
+    thread_current ()->c->status=-1;
+    printf("%s: exit(%d)\n", thread_name(), -1);
+    thread_exit();
+  }}
+   // shouldnt be reached
+
 
 }

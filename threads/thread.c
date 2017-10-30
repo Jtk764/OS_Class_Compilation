@@ -318,6 +318,7 @@ thread_exit (void)
    if( thread_current()->file != NULL ) file_close(thread_current()->file);
    free_child();
    free_fdt();
+   free_suppl_pt (&thread_current()->spt);
   sema_up(&thread_current ()->c->sema);
 #ifdef USERPROG
   process_exit ();

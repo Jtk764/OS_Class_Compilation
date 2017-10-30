@@ -1,4 +1,5 @@
-
+#ifndef VM_PAGE_H
+#define VM_PAGE_H
 
 #define STACK_SIZE (8 * (1 << 20))
 
@@ -8,23 +9,24 @@
 #include "lib/kernel/hash.h"
 #include "filesys/file.h"
 
-struct suppl_pte_data;
+struct suppl_pte_data
   {
     struct file * file; //file
     off_t ofs;			// offset in file
     uint32_t read_bytes;
     uint32_t zero_bytes;
     bool writable;		 //if writable
-} 
+}; 
 
 struct suppl_pte
 {
-  void *upageddr;   //user virtual address as the unique identifier of a page
+  void *upageaddr;   //user virtual address as the unique identifier of a page
   struct suppl_pte_data data;
   bool is_loaded;
   bool in_swap;
+  bool is_file;
   /* reserved for possible swapping */
-  size_t swap_slot_idx;
+  size_t swapIndex;
   bool swap_writable;
 
   struct hash_elem elem;
@@ -46,3 +48,6 @@ void write_page_back_to_file_wo_lock (struct suppl_pte *);
 void free_suppl_pt (struct hash *);
 bool load_page (struct suppl_pte *);
 void grow_stack (void *);
+
+
+#endif /* vm/page.h */

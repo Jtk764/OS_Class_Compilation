@@ -11,4 +11,6 @@ size_t swapToDisk(const void *);
 /*swap a frame out of swap partition*/
 void swapFromDisk(size_t, void *);
 
+void toggleSwap(size_t);
+
 #endif /* vm/swap.h */

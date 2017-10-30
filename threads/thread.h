@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <hash.h>
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 
@@ -115,7 +116,7 @@ struct thread
     int priority;                       /* Priority. */
     
     struct list_elem allelem;           /* List element for all threads list. */
-
+    struct hash spt;
 
     struct child_sema *c;
     /* Shared between thread.c and synch.c. */
