@@ -100,7 +100,7 @@ save_evicted_frame (struct frame *vf)
            || (!spte->is_file))
     {
       swapIndex = swapToDisk (spte->upageaddr);
-      if (swapIndex == NULL)
+      if (swapIndex == SWAPERROR)
         return false;
 
       spte->in_swap = true;
@@ -192,7 +192,7 @@ add_frame (void *frame)
 void *
 evict_frame ()
 {
-  bool result;
+  volatile bool result;
   struct frame *vf;
   struct thread *t = thread_current ();
 

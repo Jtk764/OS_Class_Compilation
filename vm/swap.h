@@ -1,7 +1,7 @@
 #ifndef VM_SWAP_H
 #define VM_SWAP_H
 
-
+#define SWAPERROR SIZE_MAX
 /*init function*/
 void init_swap();
 
