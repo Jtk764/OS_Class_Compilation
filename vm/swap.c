@@ -19,7 +19,7 @@ void init_swap() {
 
 size_t swapToDisk(const void *virtualAddr){
 	size_t swapIndex = bitmap_scan_and_flip(swapPartition, 0, 1, false);
-	if(swapIndex == BITMAP_ERROR) return NULL;
+	if(swapIndex == BITMAP_ERROR) return SWAPERROR;
 
 	int i;
 	for(i = 0; i < pageSectors; i++){
