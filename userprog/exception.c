@@ -132,7 +132,7 @@ page_fault (struct intr_frame *f)
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
-  struct suppl_pte* spte;
+  volatile struct suppl_pte* spte;
   struct thread* cur=thread_current();
 
   /* Obtain faulting address, the virtual address that was

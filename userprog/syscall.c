@@ -110,6 +110,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     int ftemp;
     char* name = thread_name();
     struct file *ret;
+    unsigned buffer_size;
+    void * buffer;
     if ( f->esp > PHYS_BASE ){  
         printf("%s: exit(%d)\n", name, test);
         thread_current ()->c->status=-1;
@@ -250,7 +252,54 @@ syscall_handler (struct intr_frame *f UNUSED)
             sema_up(&sema);
             break;
         case SYS_READ:
-            if(!check_string2((uint8_t *)*(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
+            buffer_size = *(call + 3);
+            buffer = *(call + 2);
+            while (buffer != NULL)
+            {
+                if (buffer >= PHYS_BASE){
+                    printf("%s: exit(%d)\n", name, test);
+                    thread_current ()->c->status=-1;
+                    thread_exit();
+                    break;
+                }
+                
+
+                if (pagedir_get_page (current->pagedir, buffer) == NULL){ 
+                    struct suppl_pte *spte;
+                    spte = get_suppl_pte (&current->spt, 
+                    pg_round_down (buffer));
+                    if (spte != NULL && !spte->is_loaded)
+                        load_page (spte);
+                    else if (spte == NULL && buffer >= (f->esp - 32))
+                        grow_stack (buffer);
+                    else{
+                        printf("%s: exit(%d)\n", name, test);
+                        thread_current ()->c->status=-1;
+                        thread_exit();
+                        break;
+                    }
+                }
+      
+                /* Advance */
+                if (buffer_size == 0){
+                /* terminate the checking loop */
+                buffer = NULL;
+                }
+                else if (buffer_size > PGSIZE){
+                    buffer += PGSIZE;
+                    buffer_size -= PGSIZE;
+                }
+                else{
+                /* last loop */
+                buffer = buffer + *(call + 3) - 1;
+                buffer_size = 0;
+                }
+
+            }
+            
+
+
+//            if(!check_string2((uint8_t *)*(call + 2), (uint8_t *)*(call + 3))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
             if(*(call + 1) == 0){
                 int i;
