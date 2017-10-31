@@ -166,6 +166,7 @@ suppl_pt_insert_file (struct file *file, off_t ofs, uint8_t *upage,
     return false;
   
   spte->upageaddr = upage;
+  spte->is_file=true;
   spte->data.file = file;
   spte->data.ofs = ofs;
   spte->data.read_bytes = read_bytes;

@@ -15,14 +15,12 @@
 
 static struct lock frametable_lock;
 static struct lock eviction_lock;
-static struct lock vm_lock;
 
 void frame_init ()
 {
   list_init (&frames);
   lock_init (&frametable_lock);
   lock_init (&eviction_lock);
-  lock_init (&vm_lock);
 }
 
 
@@ -87,6 +85,7 @@ save_evicted_frame (struct frame *vf)
     {
       spte = calloc(1, sizeof *spte);
       spte->upageaddr = vf->upage;
+      spte->is_file=false;
       spte->in_swap = true;
       if (!insert_suppl_pte (&t->spt, spte))
         return false;
@@ -129,7 +128,7 @@ remove_frame (void *frame)
   struct frame *vf;
   struct list_elem *e;
   
-  lock_acquire (&vm_lock);
+  lock_acquire (&frametable_lock);
   e = list_head (&frames);
   while ((e = list_next (e)) != list_tail (&frames))
     {
@@ -141,7 +140,7 @@ remove_frame (void *frame)
           break;
         }
     }
-  lock_release (&vm_lock);
+  lock_release (&frametable_lock);
 }
 
 
@@ -154,7 +153,7 @@ get_frame (void *frame)
   struct frame *vf;
   struct list_elem *e;
   
-  lock_acquire (&vm_lock);
+  lock_acquire (&frametable_lock);
   e = list_head (&frames);
   while ((e = list_next (e)) != list_tail (&frames))
     {
@@ -163,7 +162,7 @@ get_frame (void *frame)
         break;
       vf = NULL;
     }
-  lock_release (&vm_lock);
+  lock_release (&frametable_lock);
 
   return vf;
 }
@@ -181,9 +180,9 @@ add_frame (void *frame)
   vf->tid = thread_current ()->tid;
   vf->frame = frame;
   
-  lock_acquire (&vm_lock);
+  lock_acquire (&frametable_lock);
   list_push_back (&frames, &vf->elem);
-  lock_release (&vm_lock);
+  lock_release (&frametable_lock);
 
   return true;
   
