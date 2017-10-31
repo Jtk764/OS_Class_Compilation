@@ -283,7 +283,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                 /* Advance */
                 if (buffer_size == 0){
                 /* terminate the checking loop */
-                buffer = NULL;
+                buffer = NULL;  
                 }
                 else if (buffer_size > PGSIZE){
                     buffer += PGSIZE;

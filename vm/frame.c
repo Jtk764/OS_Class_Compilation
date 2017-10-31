@@ -133,7 +133,7 @@ remove_frame (void *frame)
   while ((e = list_next (e)) != list_tail (&frames))
     {
       vf = list_entry (e, struct frame, elem);
-      if (vf->frame == frame)
+      if (vf->frame == framese)
         {
           list_remove (e);
           free (vf);
