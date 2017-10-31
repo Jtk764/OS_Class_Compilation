@@ -1,6 +1,7 @@
 #include "devices/block.h"
 #include "lib/kernel/bitmap.h"
 #include "threads/vaddr.h"
+#include "swap.h"
 
 static struct block *swapPartition;
 
