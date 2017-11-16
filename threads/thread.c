@@ -11,8 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "threads/malloc.h"
-#include "filesys/file.h"
+#include <inttypes.h>
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -26,12 +25,15 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list waiting_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
+
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
@@ -73,6 +75,20 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+void thread_sleep(int64_t ticks){
+  struct thread *t = thread_current();
+  enum intr_level old_level;
+  t->sleepTime = timer_ticks();
+  t->sleepTicks = ticks;
+
+  old_level = intr_disable ();
+  list_push_back(&waiting_list, &t->elem);
+  thread_block();
+  intr_set_level (old_level);
+
+  
+}
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -94,37 +110,14 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&waiting_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid ();  
+  initial_thread->tid = allocate_tid ();
 }
-
-
-void free_child(){
-  struct child_sema* c;
-  while (!list_empty (&thread_current()->children))
-     {
-      struct list_elem *e = list_pop_front (&thread_current()->children);
-      c=list_entry (e, struct child_sema, childelem);
-      free(c);
-     }
-}
-
-void free_fdt(){
-  struct fdesc* c;
-  while (!list_empty (&thread_current()->fdt))
-     {
-      struct list_elem *e = list_pop_front (&thread_current()->fdt);
-      c=list_entry (e, struct fdesc, elem);
-      file_close(c->f);
-      free(c);
-     }
-}
-
-
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
@@ -159,6 +152,26 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  enum intr_level old_level;
+  struct list_elem *e, *nextElem;
+  e = list_begin(&waiting_list);
+  while(e != list_end(&waiting_list))
+  {
+    nextElem = list_next(e);
+    struct thread *waitingThread = list_entry (e, struct thread, elem);
+    int time = timer_ticks();
+    if(time >= waitingThread->sleepTime + waitingThread->sleepTicks){
+        old_level = intr_disable ();
+        list_remove (&waitingThread->elem);
+        waitingThread->sleepTime = -1;
+        waitingThread->sleepTicks = 0;
+        thread_unblock(waitingThread);
+        intr_set_level (old_level);
+    }
+    e = nextElem;
+  }
+  
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -197,9 +210,6 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  
-    
-
 
   ASSERT (function != NULL);
 
@@ -211,12 +221,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-//  list_init(&t->fdt);
-  if(t != initial_thread->tid){
-    t->c->tid=t->tid;
-    t->parent=thread_current();
-    list_push_back (&t->parent->children, &t->c->childelem);
-  }
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -315,22 +320,17 @@ void
 thread_exit (void)
 {
   ASSERT (!intr_context ());
-   if( thread_current()->file != NULL ) file_close(thread_current()->file);
-   free_child();
-   free_fdt();
-   free_suppl_pt (&thread_current()->spt);
-  sema_up(&thread_current ()->c->sema);
+
 #ifdef USERPROG
   process_exit ();
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
-     and schedule another process.  That process will destroy usF
+     and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
-
   schedule ();
   NOT_REACHED ();
 }
@@ -490,7 +490,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -503,16 +502,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-
-  list_init(&t->children);
-  list_init(&t->fdt);
-  if(t != initial_thread){
-    t->c=(struct child_sema *)malloc(sizeof(struct child_sema));
-//    t->c->waited = false;
-    sema_init (&t->c->p_sema,0);
-    sema_init (&t->c->sema,0);
-
-  }
+  t->sleepTime = -1;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -634,18 +624,3 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
-struct thread
-*get_thread_by_id (tid_t id)
-{
-  ASSERT (id != TID_ERROR);
-  struct list_elem *e;
-  struct thread *t;
-  e = list_tail (&all_list);
-  while ((e = list_prev (e)) != list_head (&all_list))
-    {
-      t = list_entry (e, struct thread, allelem);
-      if (t->tid == id && t->status != THREAD_DYING)
-        return t;
-    }
-  return NULL;
-}
