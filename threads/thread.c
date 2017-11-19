@@ -783,7 +783,7 @@ get_recent_cpu_curr (void)
 void
 get_recent_cpu_for_all (void)
 {
-  thread_foreach (get_recent_cpu_curr, NULL);
+  thread_foreach (get_recent_cpu, NULL);
 }
 
 
