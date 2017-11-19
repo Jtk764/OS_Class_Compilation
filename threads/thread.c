@@ -90,7 +90,7 @@ if(a != NULL || b != NULL){
   const struct thread *c = list_entry (a, struct thread, elem);
   const struct thread *d = list_entry (b, struct thread, elem);
 
-  return c->sleepTicks < d->sleepTicks;
+  return c->sleepTicks + c->sleepTime < d->sleepTicks + d->sleepTime ;
 }}
 
 static bool
@@ -111,7 +111,7 @@ void thread_sleep(int64_t ticks){
   t->sleepTicks = ticks;
 
   old_level = intr_disable ();
-  list_push_back(&waiting_list, &t->elem);
+  list_insert_ordered ( &waiting_list, &t->elem, sleepTicks_orderer, NULL);
   thread_block();
   intr_set_level (old_level);
 
@@ -240,7 +240,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-
+  enum intr_level old_level;
   ASSERT (function != NULL);
 
   /* Allocate thread. */
@@ -252,6 +252,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+
+  old_level = intr_disable ();
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -266,6 +268,8 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+  intr_set_level (old_level);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -436,7 +440,7 @@ get_recent_cpu (struct thread *cur)
     {
       int x = MULT_INT (load_avg, 2);// 2*load_avg
       int y = DIVIDE (x, ADD_INT (x, 1)); //(2*load_avg)/(2*load_avg + 1)
-      cur->recent = ADD_INT (MULTIPLE (y, cur->recent),cur->nice);
+      cur->recent = ADD_INT ( MULTIPLE (y, cur->recent) ,cur->nice);
     }
 }
 
