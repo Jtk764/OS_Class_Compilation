@@ -24,6 +24,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define NICE_MIN -20
+#define NICE_MAX 20
+#define NICE_DEFAULT 0
 
 /* A kernel thread or user process.
 
@@ -95,6 +98,8 @@ struct thread
     int64_t sleepTicks;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    int nice;
+    int recent;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -137,6 +142,11 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+
+void get_recent_cpu (struct thread *);
+void calc_load_avg(void);
+void get_recent_cpu_for_all (void);
+void calculate_thread_priority_all(void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

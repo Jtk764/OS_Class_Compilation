@@ -32,6 +32,18 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+
+static bool
+priority_orderer (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+if(a != NULL || b != NULL){
+  const struct thread *c = list_entry (a, struct thread, elem);
+  const struct thread *d = list_entry (b, struct thread, elem);
+
+  return c->priority > d->priority;
+}
+}
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -68,7 +80,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0)
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered (&sema->waiters, &thread_current ()->elem, priority_orderer, NULL);
       thread_block ();
     }
   sema->value--;
@@ -109,14 +121,22 @@ void
 sema_up (struct semaphore *sema)
 {
   enum intr_level old_level;
-
+  struct thread *next = NULL;
+  struct thread *curr = thread_current();
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters))
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+   while (!list_empty (&sema->waiters))
+    {
+
+    next = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
+    thread_unblock (next);
+    }
   sema->value++;
+  if (next != NULL && next->priority > curr->priority)
+    {
+      thread_yield ();
+    }
   intr_set_level (old_level);
 }
 
@@ -195,9 +215,11 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
+  enum intr_level old_level;
+  old_level = intr_disable ();
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
