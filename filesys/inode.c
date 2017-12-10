@@ -303,6 +303,7 @@ inode_open (block_sector_t sector)
 
   //inode contains disk data
   inode->length = inode->data.length;
+  inode->readTil = inode->length;
   inode->dir_index = inode->data.dir_index;
   inode->indir_index = inode->data.indir_index;
   inode->dindir_index = inode->data.dindir_index;
