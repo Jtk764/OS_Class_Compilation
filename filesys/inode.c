@@ -167,7 +167,7 @@ inode_create (block_sector_t sector, off_t length)
       //use this inode initialized to zero to hold what disk inode should hold
       //populate it, then copy it to the disk structure, then write the disk inode to disk
       inode = calloc(1, sizeof *inode);
-      formatInode(&inode, length);
+      formatInode(inode, length);
       disk_inode->dir_index = inode->dir_index;
       disk_inode->indir_index = inode->indir_index;
       disk_inode->dindir_index = inode->dindir_index;
@@ -307,7 +307,7 @@ inode_open (block_sector_t sector)
   inode->dir_index = inode->data.dir_index;
   inode->indir_index = inode->data.indir_index;
   inode->dindir_index = inode->data.dindir_index;
-  memcpy(&inode->blocks, &inode->data.blocks, 14 * sizeof(block_sector_t));
+  memcpy( &inode->blocks, &inode->data.blocks, 14 * sizeof(block_sector_t));
 
   return inode;
 }
