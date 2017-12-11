@@ -26,7 +26,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -233,4 +233,35 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         }
     }
   return false;
+}
+
+bool dir_is_root(struct dir* dir)
+{
+  if (dir != NULL && inode_get_inumber(dir_get_inode(dir)) == ROOT_DIR_SECTOR)
+    return true;
+  else
+    return false;
+} 
+
+struct inode* dir_parent_inode(struct dir* dir){
+  if(dir == NULL) return NULL;
+  
+  block_sector_t sector = inode_get_parent(dir_get_inode(dir));
+  return inode_open(sector);
+}
+
+bool dir_is_empty (struct inode *inode)
+{
+  struct dir_entry e;
+  off_t pos = 0;
+
+  while (inode_read_at (inode, &e, sizeof e, pos) == sizeof e) 
+  {
+    pos += sizeof e;
+    if (e.in_use)
+    {
+      return false;
+    }
+  }
+  return true;
 }

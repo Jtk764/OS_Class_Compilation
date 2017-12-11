@@ -152,6 +152,7 @@ start_process (void *file_name_)
   }
   free_arg_list();
   sema_up(&thread_current()->c->p_sema);
+  if (!thread_current()->dir) thread_current()->dir = dir_open_root();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -416,8 +417,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
- if  (success) {file_deny_write(file); thread_current()->file=file;}
-  else file_close (file);
+ if  (success) { file_deny_write(file); thread_current()->file=file;}
+  //else file_close (file);
   return success;
 }
 

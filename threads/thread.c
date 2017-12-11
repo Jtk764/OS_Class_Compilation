@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -232,6 +233,8 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  if(thread_current()->dir) t->dir = dir_reopen(thread_current()->dir);
+  else t->dir = NULL;
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -502,7 +505,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-
+  t->dir = NULL;
   list_init(&t->children);
   list_init(&t->fdt);
   if(t != initial_thread){

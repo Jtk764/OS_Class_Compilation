@@ -134,6 +134,7 @@ struct thread
 
     struct list fdt;
     struct list children;
+    struct dir *dir;
   };
 
 

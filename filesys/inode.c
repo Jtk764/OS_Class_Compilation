@@ -30,12 +30,14 @@ struct inode_disk
 //    block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125 + 1 - 14 - 3];               /* Not used. */
+    uint32_t unused[107];               /* Not used. */
 
     uint32_t dir_index;
     uint32_t indir_index;
     uint32_t dindir_index;
     block_sector_t blocks[14];
+    bool is_dir;
+    block_sector_t parent;
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -54,7 +56,7 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
+    //struct inode_disk data;             /* Inode content. */
 
     off_t length;
     off_t readTil;
@@ -62,7 +64,9 @@ struct inode
     uint32_t indir_index;
     uint32_t dindir_index;
     block_sector_t blocks[14];
-    
+    bool is_dir;
+    block_sector_t parent;
+    //struct lock lock;
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -130,7 +134,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -168,6 +172,8 @@ inode_create (block_sector_t sector, off_t length)
       //populate it, then copy it to the disk structure, then write the disk inode to disk
       inode = calloc(1, sizeof *inode);
       formatInode(inode, length);
+      disk_inode->is_dir = is_dir;
+      disk_inode->parent = ROOT_DIR_SECTOR;
       disk_inode->dir_index = inode->dir_index;
       disk_inode->indir_index = inode->indir_index;
       disk_inode->dindir_index = inode->dindir_index;
@@ -275,7 +281,7 @@ inode_open (block_sector_t sector)
 {
   struct list_elem *e;
   struct inode *inode;
-
+  struct inode_disk inode_disk;
   /* Check whether this inode is already open. */
   for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
        e = list_next (e))
@@ -299,15 +305,17 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read (fs_device, inode->sector, &inode->data);
+  block_read (fs_device, inode->sector, &inode_disk);
 
   //inode contains disk data
-  inode->length = inode->data.length;
+  inode->length = inode_disk.length;
   inode->readTil = inode->length;
-  inode->dir_index = inode->data.dir_index;
-  inode->indir_index = inode->data.indir_index;
-  inode->dindir_index = inode->data.dindir_index;
-  memcpy( &inode->blocks, &inode->data.blocks, 14 * sizeof(block_sector_t));
+  inode->dir_index = inode_disk.dir_index;
+  inode->indir_index = inode_disk.indir_index;
+  inode->dindir_index = inode_disk.dindir_index;
+  inode->parent = inode_disk.parent;
+  inode->is_dir = inode_disk.is_dir;
+  memcpy( &inode->blocks, inode_disk.blocks, 14 * sizeof(block_sector_t));
 
   return inode;
 }
@@ -334,6 +342,7 @@ inode_get_inumber (const struct inode *inode)
 void
 inode_close (struct inode *inode)
 {
+  struct inode_disk inode_disk;
   size_t index = 0;
   size_t sectors;
   block_sector_t levelOne[128];
@@ -414,12 +423,14 @@ inode_close (struct inode *inode)
           */
         }
         else{
-          inode->data.length = inode->length;
-          inode->data.dir_index = inode->dir_index;
-          inode->data.indir_index = inode->indir_index;
-          inode->data.dindir_index = inode->dindir_index;
-          memcpy(&inode->data.blocks, &inode->blocks, 14*sizeof(BLOCK_SECTOR_SIZE));
-          block_write(fs_device, inode->sector, &inode->data); 
+          inode_disk.length = inode->length;
+          inode_disk.dir_index = inode->dir_index;
+          inode_disk.indir_index = inode->indir_index;
+          inode_disk.dindir_index = inode->dindir_index;
+          inode_disk.is_dir = inode->is_dir;
+          inode_disk.parent = inode->parent;
+          memcpy(&inode_disk.blocks, &inode->blocks, 14*sizeof(BLOCK_SECTOR_SIZE));
+          block_write(fs_device, inode->sector, &inode_disk); 
         }
         free (inode);
     }
@@ -577,16 +588,46 @@ inode_deny_write (struct inode *inode)
    Must be called once by each inode opener who has called
    inode_deny_write() on the inode, before closing the inode. */
 void
-inode_allow_write (struct inode *inode)
+inode_allow_write (struct inode *inode) 
 {
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
   inode->deny_write_cnt--;
 }
-
 /* Returns the length, in bytes, of INODE's data. */
 off_t
 inode_length (const struct inode *inode)
 {
-  return inode->data.length;
+  return inode->length;
+}
+
+bool
+inode_is_dir (const struct inode *inode)
+{
+  return inode->is_dir;
+}
+
+int
+inode_get_open_cnt (const struct inode *inode)
+{
+  return inode->open_cnt;
+}
+
+bool
+inode_set_parent (block_sector_t parent, block_sector_t child)
+{
+  struct inode* inode = inode_open(child);
+
+  if (!inode)
+    return false;
+
+  inode->parent = parent;
+  inode_close(inode);
+  return true;
+}
+
+block_sector_t
+inode_get_parent (const struct inode *inode)
+{
+  return inode->parent;
 }

@@ -8,9 +8,21 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "filesys/file.h" 
+#include "filesys/filesys.h" 
 #include <string.h>
+#include "devices/block.h"
 
 static void syscall_handler (struct intr_frame *);
+
+
+
+
+bool sys_readdir(struct file* file, char *path);
+bool sys_isdir(struct file* file);
+int sys_inumber(struct file* file);
+
+
+
 
 struct fdesc* findFD(struct list *l, int fd){
     struct list_elem *e;
@@ -65,6 +77,8 @@ check_string(char *start){
     return false;
 }
 
+
+
 static bool
 check_string2(uint8_t *start, int length){
     char temp;
@@ -108,6 +122,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     int ftemp;
     char* name = thread_name();
     struct file *ret;
+    struct inode* inode;
     if ( f->esp > PHYS_BASE ){  
         printf("%s: exit(%d)\n", name, test);
         thread_current ()->c->status=-1;
@@ -131,23 +146,6 @@ syscall_handler (struct intr_frame *f UNUSED)
                 }
             }
 
-/*          length = strlen(name) + strlen(exitcode) + 1 + strlen(codeEnd)+1;
-            snprintf(result, length, "%s%s%d%s", name, exitcode, *(call+1), codeEnd);
-
-/*
-            strlcpy(result, name, (strlen(name)+1)*sizeof(char));
-            length = strlen(name);
-            strlcat(result, exitcode, (length + strlen(exitcode) + 1)*sizeof(char));
-            length += strlen(exitcode);
-            int temp = *(call + 1);
-            result[length] = temp;
-            result[length + 1] = '\0';
-            length += 1;
-            strlcat(result, codeEnd, (length + strlen(codeEnd)+1)*sizeof(char));
-            length += strlen(codeEnd);
-
-            putbuf(result, length);
-*/
             if (!check_sp(call, 8)) {printf("%s: exit(%d)\n", name, test); thread_current ()->c->status=-1;}
             else printf("%s%s%i%s\n", name, exitcode, *(call+1), codeEnd);
             thread_exit();
@@ -182,7 +180,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         case SYS_CREATE:
             if(!check_string((char*)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
             sema_down(&sema);
-            (f->eax) = filesys_create(*(call+1), *(call+2));
+            (f->eax) = filesys_create(*(call+1), *(call+2), false);
             sema_up(&sema);
             break;
         case SYS_REMOVE:
@@ -223,7 +221,7 @@ syscall_handler (struct intr_frame *f UNUSED)
                         else if(list_entry(e, struct fdesc, elem)->fd == (list_size(&(current->fdt)) + 1)){
                             filed->fd = list_size(&(current->fdt)) + 2;
                             list_push_back(&(current->fdt), &(filed->elem));
-                            (f->eax) = list_size(&(current->fdt)) + 2;
+                            (f->eax) = filed->fd;
                             break;
                         }
 
@@ -331,13 +329,99 @@ syscall_handler (struct intr_frame *f UNUSED)
                 thread_exit();
                 break;
             }
-            ftemp = fl->f;
-            file_close(fl->f);
+            inode = file_get_inode(fl->f);
+            if(inode == NULL) return;
+            if(inode_is_dir(inode)) dir_close(fl->f);
+            else file_close(fl->f);
             list_remove(&fl->elem);
             free(fl);
-            sema_up(&sema);
+            sema_up(&sema); 
             break;
+case SYS_CHDIR:
+     if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
+    f->eax=filesys_chdir((uint8_t *)*(call + 1));
+    break;
+  case SYS_MKDIR:
+  if(!check_string((uint8_t *)*(call + 1))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
+    f->eax=filesys_create((uint8_t *)*(call + 1), 0, true);
+    break;
+  case SYS_READDIR:
+  if(!check_string((uint8_t *)*(call + 2))) {  printf("%s: exit(%d)\n", name, test);thread_current ()->c->status=-1;thread_exit(); }
+                fl = findFD(&(current->fdt), *(call + 1));
+            if(fl == NULL){
+                printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
+                sema_up(&sema);
+                thread_exit();
+                break;
+            }
+    f->eax=sys_readdir(&fl->f, (char*)*((int *)f->esp + 2));
+    break;
+  case SYS_ISDIR:
+                fl = findFD(&(current->fdt), *(call + 1));
+            if(fl == NULL){
+                printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
+                sema_up(&sema);
+                thread_exit();
+                break;
+            }
+    f->eax=sys_isdir(&fl->f);
+    break;
+  case SYS_INUMBER:
+            fl = findFD(&(current->fdt), *(call + 1));
+            if(fl == NULL){
+                printf("%s: exit(%d)\n", name, test);
+                thread_current ()->c->status=-1;
+                sema_up(&sema);
+                thread_exit();
+                break;
+            }
+    f->eax=sys_inumber(&fl->f);
+    break;
+
     }
 
 }
 
+
+
+
+
+bool sys_readdir(struct file* file, char* path)
+{
+    if (file == NULL) return false;
+    
+    struct inode* inode = file_get_inode(file);
+    if(inode == NULL) return false;
+    if(!inode_is_dir(inode)) return false;
+    
+    // struct dir* dir = dir_open(inode);
+    struct dir* dir = (struct dir*) file;
+    // if(dir == NULL) return false;
+    if(!dir_readdir(dir, path)) return false;
+    
+    return true;
+}
+
+bool sys_isdir(struct file* file)
+{
+    if (file == NULL) return false;
+
+    struct inode* inode = file_get_inode(file);
+    if(inode == NULL) return false;
+    if(!inode_is_dir(inode)) return false;
+    
+    return true;
+}
+
+int sys_inumber(struct file* file)
+{
+    if (file == NULL) return false;
+
+    struct inode* inode = file_get_inode(file);
+    if(inode == NULL) return false;
+
+    block_sector_t inumber = inode_get_inumber(inode);
+    return inumber;
+}
