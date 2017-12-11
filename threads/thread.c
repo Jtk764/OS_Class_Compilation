@@ -116,11 +116,14 @@ void free_child(){
 
 void free_fdt(){
   struct fdesc* c;
+   struct inode* inode;
   while (!list_empty (&thread_current()->fdt))
      {
       struct list_elem *e = list_pop_front (&thread_current()->fdt);
       c=list_entry (e, struct fdesc, elem);
-      file_close(c->f);
+      inode = file_get_inode(c->f);  
+      if(inode_is_dir(inode)) dir_close(c->f);
+      else file_close(c->f);
       free(c);
      }
 }
@@ -321,6 +324,7 @@ thread_exit (void)
    if( thread_current()->file != NULL ) file_close(thread_current()->file);
    free_child();
    free_fdt();
+   if (thread_current()->dir) dir_close(thread_current()->dir);
   sema_up(&thread_current ()->c->sema);
 #ifdef USERPROG
   process_exit ();

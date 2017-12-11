@@ -264,7 +264,8 @@ syscall_handler (struct intr_frame *f UNUSED)
                 thread_exit();
                 break;
             }
-            (f->eax) = file_read(fl->f, *(call + 2), *(call + 3));
+            else if (inode_is_dir(file_get_inode(fl->f))) (f->eax)=-1;
+            else (f->eax) = file_read(fl->f, *(call + 2), *(call + 3));
             sema_up(&sema);
             break;
         case SYS_WRITE:
@@ -287,7 +288,8 @@ syscall_handler (struct intr_frame *f UNUSED)
                     thread_exit();
                     break;
                 }
-                (f->eax) = file_write(fl->f, *(call + 2), *(call + 3));
+                else if (inode_is_dir(file_get_inode(fl->f))) (f->eax)=-1;
+                else (f->eax) = file_write(fl->f, *(call + 2), *(call + 3));
             }
             sema_up(&sema);
             break;
@@ -355,7 +357,7 @@ case SYS_CHDIR:
                 thread_exit();
                 break;
             }
-    f->eax=sys_readdir(&fl->f, (char*)*((int *)f->esp + 2));
+    f->eax=sys_readdir(fl->f, (char*)*((int *)f->esp + 2));
     break;
   case SYS_ISDIR:
                 fl = findFD(&(current->fdt), *(call + 1));
@@ -366,7 +368,7 @@ case SYS_CHDIR:
                 thread_exit();
                 break;
             }
-    f->eax=sys_isdir(&fl->f);
+    f->eax=sys_isdir(fl->f);
     break;
   case SYS_INUMBER:
             fl = findFD(&(current->fdt), *(call + 1));
@@ -377,7 +379,7 @@ case SYS_CHDIR:
                 thread_exit();
                 break;
             }
-    f->eax=sys_inumber(&fl->f);
+    f->eax=sys_inumber(fl->f);
     break;
 
     }
